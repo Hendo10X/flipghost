@@ -27,6 +27,7 @@ import { getStagePreset, STAGE_PRESETS, useFlipbook } from "@/lib/flipbook/store
 import { cue } from "@/lib/sound"
 import { signOut, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
+import { HotkeysMenu } from "@/components/workshop/hotkeys-menu"
 import { UserAvatar } from "@/components/user-avatar"
 import {
   Select,
@@ -173,6 +174,10 @@ export function WorkshopHeader() {
             {exportError}
           </span>
         )}
+
+        <HotkeysMenu />
+
+        <div className="h-4 w-px bg-border" />
 
         {session && (
           <Tooltip>
