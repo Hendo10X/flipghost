@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import "./hotkey-key.css"
 
 function Kbd({ children, className }: React.ComponentProps<"kbd">) {
   return (
@@ -30,6 +31,29 @@ function Kbd({ children, className }: React.ComponentProps<"kbd">) {
     >
       {children}
     </kbd>
+  )
+}
+
+/**
+ * A pressable key chip. Uses the Algolia button treatment in neutral tones,
+ * so it reads dark on a light theme and white on a dark one.
+ */
+function KeyButton({
+  children,
+  recording,
+  ...props
+}: React.ComponentProps<"button"> & { recording?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "hotkey-key inline-flex h-6 min-w-7 cursor-pointer items-center justify-center rounded-md bg-primary px-2 font-mono text-[11px] font-medium whitespace-nowrap text-primary-foreground transition-[transform,box-shadow] duration-150 ease-out outline-none select-none hover:-translate-y-0.5 active:translate-y-0.5",
+        recording && "italic opacity-80"
+      )}
+      {...props}
+    >
+      {children}
+    </button>
   )
 }
 
@@ -73,9 +97,9 @@ export function HotkeysMenu() {
     >
       <PopoverTrigger
         render={
-          <Button size="lg" aria-label="Keyboard shortcuts">
+          <Button variant="outline" size="lg" aria-label="Keyboard shortcuts">
             <HugeiconsIcon icon={KeyboardIcon} strokeWidth={1.8} />
-            <span className="hidden lg:inline">Hotkeys</span>
+            Hotkeys
           </Button>
         }
       />
@@ -109,24 +133,15 @@ export function HotkeysMenu() {
               className="flex items-center justify-between gap-3 py-1"
             >
               <span className="text-xs text-muted-foreground">{label}</span>
-              <button
-                type="button"
+              <KeyButton
                 aria-label={`Change shortcut for ${label}`}
+                recording={recording === action}
                 onClick={() =>
                   setRecording((current) => (current === action ? null : action))
                 }
-                className="outline-none"
               >
-                <Kbd
-                  className={cn(
-                    "cursor-pointer transition-colors hover:border-ring",
-                    recording === action &&
-                      "border-ring bg-background text-muted-foreground italic"
-                  )}
-                >
-                  {recording === action ? "Press…" : formatHotkey(keys[action])}
-                </Kbd>
-              </button>
+                {recording === action ? "Press…" : formatHotkey(keys[action])}
+              </KeyButton>
             </div>
           ))}
         </div>

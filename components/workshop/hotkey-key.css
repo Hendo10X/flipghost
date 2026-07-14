@@ -1,0 +1,34 @@
+@layer components {
+  /* The Algolia button treatment, themed neutral: the lip is a shade of the
+     button itself rather than a fixed blue. */
+  .hotkey-key {
+    --hotkey-lip: rgba(0, 0, 0, 0.5);
+    box-shadow:
+      rgba(45, 35, 66, 0.4) 0 2px 4px,
+      rgba(45, 35, 66, 0.3) 0 7px 13px -3px,
+      var(--hotkey-lip) 0 -3px 0 inset;
+  }
+
+  .dark .hotkey-key {
+    --hotkey-lip: rgba(0, 0, 0, 0.22);
+  }
+
+  .hotkey-key:hover {
+    box-shadow:
+      rgba(45, 35, 66, 0.4) 0 4px 8px,
+      rgba(45, 35, 66, 0.3) 0 7px 13px -3px,
+      var(--hotkey-lip) 0 -3px 0 inset;
+  }
+
+  .hotkey-key:focus-visible {
+    box-shadow:
+      var(--hotkey-lip) 0 0 0 1.5px inset,
+      rgba(45, 35, 66, 0.4) 0 2px 4px,
+      rgba(45, 35, 66, 0.3) 0 7px 13px -3px,
+      var(--hotkey-lip) 0 -3px 0 inset;
+  }
+
+  .hotkey-key:active {
+    box-shadow: var(--hotkey-lip) 0 3px 7px inset;
+  }
+}
