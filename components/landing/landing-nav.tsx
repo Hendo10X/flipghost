@@ -1,11 +1,14 @@
 "use client"
 
 import Link from "next/link"
+import { Dialog } from "@base-ui/react/dialog"
 import { NavigationMenu } from "@base-ui/react/navigation-menu"
 import {
   ArrowDown01Icon,
+  Cancel01Icon,
   Film01Icon,
   GhostIcon,
+  Menu01Icon,
   PaintBoardIcon,
   PlayListIcon,
 } from "@hugeicons/core-free-icons"
@@ -168,14 +171,136 @@ export function LandingNav() {
           render={<Link href="/signin" />}
           variant="ghost"
           size="lg"
-          className="text-muted-foreground hover:text-foreground"
+          className="hidden text-muted-foreground hover:text-foreground md:inline-flex"
         >
           Sign in
         </Button>
-        <Button render={<Link href="/signup" />} size="lg" className="px-3">
+        <Button
+          render={<Link href="/signup" />}
+          size="lg"
+          className="hidden px-3 md:inline-flex"
+        >
           Get started
         </Button>
+        <MobileMenu />
       </div>
     </header>
+  )
+}
+
+function MobileMenu() {
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            aria-label="Open menu"
+            className="text-muted-foreground md:hidden"
+          >
+            <HugeiconsIcon icon={Menu01Icon} strokeWidth={1.8} />
+          </Button>
+        }
+      />
+      <Dialog.Portal>
+        <Dialog.Backdrop
+          className={cn(
+            "fixed inset-0 z-40 bg-black/40 md:hidden",
+            "transition-opacity duration-200 ease-out",
+            "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"
+          )}
+        />
+        <Dialog.Popup
+          className={cn(
+            "fixed inset-x-0 top-0 z-50 flex flex-col gap-1 border-b bg-popover px-4 pt-4 pb-5 text-popover-foreground shadow-lg outline-none md:hidden",
+            "transition-transform duration-200 ease-out",
+            "data-[starting-style]:-translate-y-full data-[ending-style]:-translate-y-full"
+          )}
+        >
+          <Dialog.Title className="sr-only">Menu</Dialog.Title>
+          <div className="mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-2 text-sm font-medium select-none">
+              <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
+              Flipghost
+            </span>
+            <Dialog.Close
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="Close menu"
+                  className="text-muted-foreground"
+                >
+                  <HugeiconsIcon icon={Cancel01Icon} strokeWidth={1.8} />
+                </Button>
+              }
+            />
+          </div>
+
+          <p className="px-2 pt-2 pb-1 text-[11px] font-medium text-muted-foreground">
+            Product
+          </p>
+          {PRODUCT.map((item) => (
+            <a
+              key={item.title}
+              href="#"
+              className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+            >
+              <HugeiconsIcon
+                icon={item.icon}
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.8}
+              />
+              {item.title}
+            </a>
+          ))}
+
+          <p className="px-2 pt-3 pb-1 text-[11px] font-medium text-muted-foreground">
+            Resources
+          </p>
+          {RESOURCES.map((item) => (
+            <a
+              key={item}
+              href="#"
+              className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+            >
+              {item}
+            </a>
+          ))}
+
+          <a
+            href="#"
+            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+          >
+            Pricing
+          </a>
+          <a
+            href="#"
+            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+          >
+            Showcase
+          </a>
+
+          <div className="mt-3 flex flex-col gap-2">
+            <Button
+              render={<Link href="/signup" />}
+              size="lg"
+              className="w-full"
+            >
+              Get started
+            </Button>
+            <Button
+              render={<Link href="/signin" />}
+              variant="outline"
+              size="lg"
+              className="w-full"
+            >
+              Sign in
+            </Button>
+          </div>
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

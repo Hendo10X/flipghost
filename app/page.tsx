@@ -11,10 +11,10 @@ export default function Page() {
       <main className="flex flex-1 items-center justify-center px-6">
         <div className="flex max-w-2xl flex-col items-center gap-6 pb-24 text-center">
           <div className="flex flex-col gap-4">
-            <h1 className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards text-5xl leading-[1.1] font-semibold tracking-tight text-balance duration-500 ease-out motion-reduce:animate-none sm:text-6xl">
+            <h1 className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards font-display text-5xl leading-[1.1] font-normal tracking-tight text-balance duration-500 ease-out motion-reduce:animate-none sm:text-6xl">
               Flipbook animation, right in your browser
             </h1>
-            <p className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards mx-auto max-w-md text-sm leading-relaxed text-pretty text-muted-foreground delay-75 duration-500 ease-out motion-reduce:animate-none">
+            <p className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards mx-auto max-w-md text-base leading-relaxed text-pretty text-muted-foreground delay-75 duration-500 ease-out motion-reduce:animate-none">
               Draw frame by frame, trace motion with onion skinning, and export
               looping GIFs or MP4s. No installs, no setup. Just open a canvas
               and start flipping.

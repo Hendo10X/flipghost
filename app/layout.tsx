@@ -1,5 +1,5 @@
 import type { Metadata } from "next"
-import { Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Inter, Momo_Trust_Display } from "next/font/google"
 
 import "./globals.css"
 import { SoundProvider } from "@/components/sound-provider"
@@ -19,6 +19,13 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
+// Landing-page display typeface for headings (single 400 weight).
+const momoTrustDisplay = Momo_Trust_Display({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-display",
+})
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -28,7 +35,13 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
+      className={cn(
+        "antialiased",
+        fontMono.variable,
+        "font-sans",
+        inter.variable,
+        momoTrustDisplay.variable
+      )}
     >
       <body>
         <ThemeProvider>
