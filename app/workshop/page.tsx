@@ -47,9 +47,9 @@ async function loadProject(id: string): Promise<InitialProject | null> {
 export default async function WorkshopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ p?: string; new?: string; title?: string }>
+  searchParams: Promise<{ p?: string; new?: string; title?: string; demo?: string }>
 }) {
-  const { p, new: newSize, title } = await searchParams
+  const { p, new: newSize, title, demo } = await searchParams
   let initialProject: InitialProject | null = null
 
   if (p) {
@@ -66,5 +66,11 @@ export default async function WorkshopPage({
         }
       : undefined
 
-  return <Editor initialProject={initialProject} initialNew={initialNew} />
+  return (
+    <Editor
+      initialProject={initialProject}
+      initialNew={initialNew}
+      initialDemo={!initialProject && !initialNew && demo === "1"}
+    />
+  )
 }

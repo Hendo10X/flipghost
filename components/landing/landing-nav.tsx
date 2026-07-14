@@ -134,7 +134,7 @@ export function LandingNav() {
 
           <NavigationMenu.Item>
             <NavigationMenu.Link
-              href="#"
+              render={<Link href="/showcase" />}
               className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
             >
               Showcase
@@ -269,12 +269,12 @@ function MobileMenu() {
           >
             Pricing
           </a>
-          <a
-            href="#"
+          <Link
+            href="/showcase"
             className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
           >
             Showcase
-          </a>
+          </Link>
 
           <div className="mt-3 flex flex-col gap-2">
             <Button
