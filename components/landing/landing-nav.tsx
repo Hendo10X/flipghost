@@ -56,13 +56,13 @@ export function LandingNav() {
     <header className="grid grid-cols-[1fr_auto_1fr] items-center px-6 py-4">
       <Link
         href="/"
-        className="flex items-center gap-2 justify-self-start text-sm font-medium select-none"
+        className="col-start-1 flex items-center gap-2 justify-self-start text-sm font-medium select-none"
       >
         <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
         Flipghost
       </Link>
 
-      <NavigationMenu.Root className="hidden justify-self-center md:block">
+      <NavigationMenu.Root className="col-start-2 hidden justify-self-center md:block">
         <NavigationMenu.List className="flex items-center gap-1">
           <NavigationMenu.Item>
             <NavigationMenu.Trigger className={triggerClass}>
@@ -166,7 +166,7 @@ export function LandingNav() {
         </NavigationMenu.Portal>
       </NavigationMenu.Root>
 
-      <div className="flex items-center gap-2 justify-self-end">
+      <div className="col-start-3 flex items-center gap-2 justify-self-end">
         <Button
           render={<Link href="/signin" />}
           variant="ghost"
