@@ -104,7 +104,8 @@ function DemoCard({ spec }: { spec: DemoSpec }) {
 
 export function ShowcaseGrid() {
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    // Stay single-column on very narrow phones so the hover button still fits.
+    <div className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
       {DEMOS.map((spec) => (
         <DemoCard key={spec.id} spec={spec} />
       ))}

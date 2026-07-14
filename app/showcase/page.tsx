@@ -14,7 +14,7 @@ export default function ShowcasePage() {
     <div className="flex min-h-dvh flex-col">
       <LandingNav />
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-20">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pt-10 pb-20">
         <div className="mb-8 flex flex-col gap-1.5">
           <h1 className="font-display text-xl leading-tight font-normal tracking-tight text-balance">
             Made in Flipghost
