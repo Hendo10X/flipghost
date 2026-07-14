@@ -243,6 +243,143 @@ export const DEMOS: DemoSpec[] = [
       ]
     },
   },
+  {
+    id: "ghost-float",
+    title: "Ghost float",
+    description: "A bob, with the tail trailing a beat behind.",
+    fps: 12,
+    frameCount: 16,
+    stagePresetId: "square",
+    frame: ({ t, width, height, fabric }) => {
+      const { Circle, Path } = fabric
+      const cx = width / 2
+      const radius = 160
+      const bodyLength = 180
+
+      const cycle = 2 * Math.PI * t
+      const headY = height * 0.44 + Math.sin(cycle) * height * 0.06
+      const bottom = headY + bodyLength
+      // The tail lags the body, which reads as follow-through.
+      const wobble = Math.sin(cycle - Math.PI / 2) * 18
+      const hump = 30
+
+      const path = [
+        `M ${cx - radius} ${headY}`,
+        `A ${radius} ${radius} 0 0 1 ${cx + radius} ${headY}`,
+        `L ${cx + radius} ${bottom}`,
+        `Q ${cx + radius * 0.66} ${bottom + hump + wobble} ${cx + radius / 3} ${bottom}`,
+        `Q ${cx} ${bottom - hump - wobble} ${cx - radius / 3} ${bottom}`,
+        `Q ${cx - radius * 0.66} ${bottom + hump + wobble} ${cx - radius} ${bottom}`,
+        "Z",
+      ].join(" ")
+
+      return [
+        new Path(path, { fill: ACCENT }),
+        new Circle({
+          left: cx - 52,
+          top: headY - 58,
+          radius: 16,
+          fill: INK,
+          originX: "center",
+          originY: "center",
+        }),
+        new Circle({
+          left: cx + 52,
+          top: headY - 58,
+          radius: 16,
+          fill: INK,
+          originX: "center",
+          originY: "center",
+        }),
+      ]
+    },
+  },
+  {
+    id: "ripples",
+    title: "Ripples",
+    description: "Rings expanding out and fading, staggered in time.",
+    fps: 24,
+    frameCount: 18,
+    stagePresetId: "square",
+    frame: ({ t, width, height, fabric }) => {
+      const { Circle } = fabric
+      const cx = width / 2
+      const cy = height / 2
+      const maxRadius = Math.min(width, height) * 0.42
+
+      const objects: FabricObject[] = []
+      for (let k = 0; k < 3; k++) {
+        // Each ring restarts once it has faded out, so the loop is invisible.
+        const progress = (t + k / 3) % 1
+        objects.push(
+          new Circle({
+            left: cx,
+            top: cy,
+            radius: Math.max(1, maxRadius * progress),
+            fill: "",
+            stroke: ACCENT,
+            strokeWidth: 10,
+            opacity: 1 - progress,
+            originX: "center",
+            originY: "center",
+          })
+        )
+      }
+
+      objects.push(
+        new Circle({
+          left: cx,
+          top: cy,
+          radius: 26,
+          fill: INK,
+          originX: "center",
+          originY: "center",
+        })
+      )
+
+      return objects
+    },
+  },
+  {
+    id: "coin-flip",
+    title: "Coin flip",
+    description: "A flat spin faked by squeezing the width.",
+    fps: 24,
+    frameCount: 16,
+    stagePresetId: "square",
+    frame: ({ t, width, height, fabric }) => {
+      const { Circle } = fabric
+      const radius = Math.min(width, height) * 0.26
+      const turn = Math.cos(2 * Math.PI * t)
+      // Never fully zero, so the coin keeps an edge instead of vanishing.
+      const squeeze = Math.max(Math.abs(turn), 0.04)
+      const facingFront = turn >= 0
+
+      return [
+        new Circle({
+          left: width / 2,
+          top: height / 2,
+          radius,
+          scaleX: squeeze,
+          fill: facingFront ? ACCENT : INK,
+          originX: "center",
+          originY: "center",
+        }),
+        new Circle({
+          left: width / 2,
+          top: height / 2,
+          radius: radius * 0.62,
+          scaleX: squeeze,
+          fill: "",
+          stroke: "#ffffff",
+          strokeWidth: 8,
+          opacity: 0.5,
+          originX: "center",
+          originY: "center",
+        }),
+      ]
+    },
+  },
 ]
 
 export function getDemo(id: string): DemoSpec | undefined {
