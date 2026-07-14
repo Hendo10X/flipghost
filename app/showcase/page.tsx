@@ -15,11 +15,11 @@ export default function ShowcasePage() {
       <LandingNav />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-20">
-        <div className="mb-10 flex flex-col gap-3 text-center">
-          <h1 className="font-display text-3xl leading-[1.1] font-normal tracking-tight text-balance sm:text-4xl">
+        <div className="mb-8 flex flex-col gap-1.5">
+          <h1 className="font-display text-xl leading-tight font-normal tracking-tight text-balance">
             Made in Flipghost
           </h1>
-          <p className="mx-auto max-w-md text-base leading-relaxed text-pretty text-muted-foreground">
+          <p className="max-w-md text-sm leading-relaxed text-pretty text-muted-foreground">
             Every one of these is a real project, drawn frame by frame. Hover to
             play, then open one in the workshop and take it apart.
           </p>
