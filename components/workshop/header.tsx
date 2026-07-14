@@ -24,6 +24,7 @@ import {
   type ExportFormat,
 } from "@/lib/flipbook/export"
 import { getStagePreset, STAGE_PRESETS, useFlipbook } from "@/lib/flipbook/store"
+import { cue } from "@/lib/sound"
 import { signOut, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/user-avatar"
@@ -81,6 +82,7 @@ export function WorkshopHeader() {
         (p) => setExporting({ format, progress: p.value })
       )
       downloadBlob(blob, `${slugify(state.title)}.${format}`)
+      cue("success")
     } catch (error) {
       console.error(error)
       setExportError(`${format.toUpperCase()} export failed. Please try again.`)
@@ -108,6 +110,7 @@ export function WorkshopHeader() {
       window.history.replaceState(null, "", `/workshop?p=${id}`)
       // The scratch pad now lives in the cloud; don't resurrect a stale copy.
       if (wasScratch) clearLocalSnapshot()
+      cue("success")
     } catch {
       useFlipbook.getState().setCloudStatus("error")
     }
@@ -372,7 +375,15 @@ export function WorkshopHeader() {
                     variant="ghost"
                     size="icon-lg"
                     aria-label="Sign out"
-                    onClick={() => signOut()}
+                    onClick={() =>
+                      signOut({
+                        fetchOptions: {
+                          onSuccess: () => {
+                            window.location.href = "/"
+                          },
+                        },
+                      })
+                    }
                     className="text-muted-foreground"
                   >
                     <HugeiconsIcon icon={Logout01Icon} strokeWidth={1.8} />

@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth"
 import { getStagePreset } from "@/lib/flipbook/store"
 import { Button } from "@/components/ui/button"
 import { ProjectCard } from "@/components/projects/project-card"
+import { UserAvatar } from "@/components/user-avatar"
 
 export const metadata: Metadata = {
   title: "My animations | Flipghost",
@@ -73,10 +74,19 @@ export default async function ProjectsPage() {
           <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
           Flipghost
         </Link>
-        <Button render={<Link href="/workshop" />} size="lg" className="px-3">
-          <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
-          New animation
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button render={<Link href="/workshop" />} size="lg" className="px-3">
+            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
+            New animation
+          </Button>
+          <Link
+            href="/profile"
+            aria-label="Profile and settings"
+            className="rounded-full outline-none ring-offset-2 ring-offset-background transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <UserAvatar seed={session.user.id} size={28} className="rounded-full" />
+          </Link>
+        </div>
       </header>
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 pb-16">

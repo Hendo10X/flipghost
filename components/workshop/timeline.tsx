@@ -48,6 +48,7 @@ export function Timeline() {
               <Button
                 size="icon-lg"
                 aria-label={playing ? "Pause" : "Play"}
+                data-cuelume-toggle
                 onClick={() => setPlaying(!playing)}
               >
                 <HugeiconsIcon
@@ -102,6 +103,7 @@ export function Timeline() {
                 variant="ghost"
                 size="sm"
                 aria-pressed={onionSkin}
+                data-cuelume-toggle
                 onClick={toggleOnionSkin}
                 className={cn(
                   "text-muted-foreground",
@@ -212,6 +214,8 @@ export function Timeline() {
               <Button
                 variant="outline"
                 aria-label="Add frame"
+                data-cuelume-press
+                data-cuelume-release
                 onClick={addFrame}
                 className="size-16 shrink-0 rounded-lg border-dashed text-muted-foreground"
               >

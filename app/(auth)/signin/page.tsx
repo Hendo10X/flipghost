@@ -3,7 +3,8 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { GoogleIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import Image from "next/image"
+import { Loading03Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { signIn } from "@/lib/auth-client"
@@ -24,7 +25,7 @@ export default function SignInPage() {
     setError(null)
     const { error } = await signIn.social({
       provider: "google",
-      callbackURL: "/workshop",
+      callbackURL: "/projects",
     })
     if (error) {
       setError(error.message ?? "Google sign-in failed. Please try again.")
@@ -48,7 +49,7 @@ export default function SignInPage() {
       setPending(false)
       return
     }
-    router.push("/workshop")
+    router.push("/projects")
   }
 
   return (
@@ -124,7 +125,13 @@ export default function SignInPage() {
             className="size-3.5 animate-spin"
           />
         ) : (
-          <HugeiconsIcon icon={GoogleIcon} className="size-3.5" />
+          <Image
+            src="/images/google.svg"
+            alt=""
+            width={14}
+            height={14}
+            className="size-3.5"
+          />
         )}
         Continue with Google
       </Button>

@@ -58,6 +58,7 @@ export function Toolbar() {
                 size="icon-lg"
                 aria-label={label}
                 aria-pressed={t === tool}
+                data-cuelume-toggle
                 onClick={() => setTool(t)}
                 className={cn(
                   "text-muted-foreground",
