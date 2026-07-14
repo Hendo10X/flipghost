@@ -10,6 +10,7 @@
         "@hugeicons/core-free-icons": "^4.2.2",
         "@hugeicons/react": "^1.1.9",
         "@neondatabase/serverless": "^1.1.0",
+        "@oreo-design/avatar": "^0.1.0",
         "better-auth": "^1.6.23",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -352,6 +353,8 @@
     "@nolyfill/is-core-module": ["@nolyfill/is-core-module@1.0.39", "", {}, "sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA=="],
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.43.0", "", {}, "sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg=="],
+
+    "@oreo-design/avatar": ["@oreo-design/avatar@0.1.0", "", { "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"], "bin": { "oreo-design-avatar": "dist/cli.js" } }, "sha512-+CF6a5r7C0tuDu2+dFlwj/txrrVvmZbKD9BiBzGGIjrwJxHV/qs3Y/6q2jpgo8on1GVOpv9HvTg/g6Fk/zEUSw=="],
 
     "@rtsao/scc": ["@rtsao/scc@1.1.0", "", {}, "sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g=="],
 

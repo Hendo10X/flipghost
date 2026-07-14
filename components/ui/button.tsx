@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "algolia-blue-btn bg-linear-to-r from-sky-500 to-blue-600 text-white transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0.5",
+          "algolia-blue-btn bg-linear-to-r from-sky-500 to-blue-600 bg-clip-border text-white transition-[transform,box-shadow] duration-150 ease-out hover:-translate-y-0.5 active:translate-y-0.5",
         outline:
           "border-border hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
         secondary:

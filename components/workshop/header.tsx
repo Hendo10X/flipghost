@@ -26,6 +26,7 @@ import {
 import { getStagePreset, STAGE_PRESETS, useFlipbook } from "@/lib/flipbook/store"
 import { signOut, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
+import { UserAvatar } from "@/components/user-avatar"
 import {
   Select,
   SelectContent,
@@ -352,11 +353,13 @@ export function WorkshopHeader() {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger
-                render={
-                  <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium uppercase select-none" />
-                }
+                render={<span className="inline-flex select-none" />}
               >
-                {(session.user.name || session.user.email).slice(0, 1)}
+                <UserAvatar
+                  seed={session.user.id}
+                  size={24}
+                  className="rounded-full"
+                />
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 {session.user.email}
