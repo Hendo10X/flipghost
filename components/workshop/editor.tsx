@@ -7,6 +7,7 @@ import {
   clearLocalSnapshot,
   loadLocalSnapshot,
   saveLocalSnapshot,
+  snapshotChanged,
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
 import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
@@ -81,16 +82,7 @@ export function Editor({
       let previous = snapshotFromState(useFlipbook.getState())
       unsubscribe = useFlipbook.subscribe((state) => {
         const next = snapshotFromState(state)
-        const changed =
-          next.frames !== previous.frames ||
-          next.title !== previous.title ||
-          next.fps !== previous.fps ||
-          next.stagePresetId !== previous.stagePresetId ||
-          next.currentId !== previous.currentId ||
-          next.onionSkin !== previous.onionSkin ||
-          next.brushColor !== previous.brushColor ||
-          next.brushSize !== previous.brushSize
-        if (!changed) return
+        if (!snapshotChanged(next, previous)) return
 
         const contentChanged =
           next.frames !== previous.frames ||
@@ -151,7 +143,20 @@ export function Editor({
         s.redo()
         return
       }
-      if (e.metaKey || e.ctrlKey) return
+      if (e.metaKey || e.ctrlKey) {
+        // Ctrl/Cmd +, -, 0 mirror the canvas zoom controls.
+        if (key === "=" || key === "+") {
+          e.preventDefault()
+          s.setZoom(s.zoom * 1.25)
+        } else if (key === "-") {
+          e.preventDefault()
+          s.setZoom(s.zoom / 1.25)
+        } else if (key === "0") {
+          e.preventDefault()
+          s.setZoom(1)
+        }
+        return
+      }
 
       switch (key) {
         case " ":

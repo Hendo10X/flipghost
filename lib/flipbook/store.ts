@@ -5,6 +5,22 @@ export const SNAPSHOT_SIZE = 720
 
 export const FPS_OPTIONS = [12, 24, 30] as const
 
+/** Most frames that can be ghosted on each side of the current one. */
+export const ONION_MAX = 3
+
+export const ZOOM_MIN = 0.25
+export const ZOOM_MAX = 8
+
+function clamp(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, value))
+}
+
+/** Ghost opacity for the nth neighbouring frame (1 = adjacent). */
+export function onionStepOpacity(base: number, step: number) {
+  return base * Math.pow(0.55, step - 1)
+}
+
 export interface StagePreset {
   id: string
   label: string
@@ -69,6 +85,13 @@ interface FlipbookState {
   fps: number
   playing: boolean
   onionSkin: boolean
+  /** How many frames before/after the current one to ghost (0-3). */
+  onionBefore: number
+  onionAfter: number
+  /** Opacity of the nearest ghost; further ones fall off from here. */
+  onionOpacity: number
+  /** Viewport zoom, where 1 fits the stage to the viewport. */
+  zoom: number
   tool: Tool
   brushColor: string
   brushSize: number
@@ -92,6 +115,10 @@ interface FlipbookState {
   setFps: (fps: number) => void
   setPlaying: (playing: boolean) => void
   toggleOnionSkin: () => void
+  setOnionBefore: (count: number) => void
+  setOnionAfter: (count: number) => void
+  setOnionOpacity: (opacity: number) => void
+  setZoom: (zoom: number) => void
 
   selectFrame: (id: string) => void
   addFrame: () => void
@@ -118,6 +145,10 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   fps: 12,
   playing: false,
   onionSkin: true,
+  onionBefore: 1,
+  onionAfter: 1,
+  onionOpacity: 0.3,
+  zoom: 1,
   tool: "brush",
   brushColor: "#1a1a1a",
   brushSize: 8,
@@ -140,6 +171,13 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   setFps: (fps) => set({ fps }),
   setPlaying: (playing) => set({ playing }),
   toggleOnionSkin: () => set((s) => ({ onionSkin: !s.onionSkin })),
+  setOnionBefore: (count) =>
+    set({ onionBefore: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionAfter: (count) =>
+    set({ onionAfter: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionOpacity: (opacity) =>
+    set({ onionOpacity: clamp(opacity, 0.05, 0.8) }),
+  setZoom: (zoom) => set({ zoom: clamp(zoom, ZOOM_MIN, ZOOM_MAX) }),
 
   selectFrame: (id) => {
     if (get().frames.some((f) => f.id === id)) set({ currentId: id })

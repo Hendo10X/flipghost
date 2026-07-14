@@ -11,31 +11,33 @@ export interface ProjectSnapshot {
   currentId: string
   fps: number
   onionSkin: boolean
+  onionBefore: number
+  onionAfter: number
+  onionOpacity: number
   stagePresetId: string
   brushColor: string
   brushSize: number
 }
 
-export function snapshotFromState(state: {
-  title: string
-  frames: Frame[]
-  currentId: string
-  fps: number
-  onionSkin: boolean
-  stagePresetId: string
-  brushColor: string
-  brushSize: number
-}): ProjectSnapshot {
+export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
   return {
     title: state.title,
     frames: state.frames,
     currentId: state.currentId,
     fps: state.fps,
     onionSkin: state.onionSkin,
+    onionBefore: state.onionBefore,
+    onionAfter: state.onionAfter,
+    onionOpacity: state.onionOpacity,
     stagePresetId: state.stagePresetId,
     brushColor: state.brushColor,
     brushSize: state.brushSize,
   }
+}
+
+/** Shallow compare, so new snapshot fields are covered automatically. */
+export function snapshotChanged(a: ProjectSnapshot, b: ProjectSnapshot) {
+  return (Object.keys(a) as (keyof ProjectSnapshot)[]).some((key) => a[key] !== b[key])
 }
 
 export async function loadLocalSnapshot(): Promise<ProjectSnapshot | null> {
