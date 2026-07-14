@@ -3,12 +3,7 @@
 import { useEffect } from "react"
 
 import { saveProjectToCloud } from "@/lib/flipbook/cloud"
-import {
-  buildDemoFrames,
-  DEMO_FPS,
-  DEMO_STAGE_PRESET,
-  DEMO_TITLE,
-} from "@/lib/flipbook/demo"
+import { buildDemoFrames, getDemo } from "@/lib/flipbook/demos"
 import {
   clearLocalSnapshot,
   loadLocalSnapshot,
@@ -34,11 +29,11 @@ export interface InitialProject {
 export function Editor({
   initialProject,
   initialNew,
-  initialDemo,
+  initialDemoId,
 }: {
   initialProject?: InitialProject | null
   initialNew?: { stagePresetId: string; title: string }
-  initialDemo?: boolean
+  initialDemoId?: string
 }) {
   // --- Hydration + autosave ---
   useEffect(() => {
@@ -59,17 +54,18 @@ export function Editor({
           histories: {},
           revision: s.revision + 1,
         }))
-      } else if (initialDemo) {
-        // The showcase animation, loaded as a real editable project.
-        const demoFrames = await buildDemoFrames()
+      } else if (initialDemoId && getDemo(initialDemoId)) {
+        // A showcase animation, loaded as a real editable project.
+        const spec = getDemo(initialDemoId)!
+        const demoFrames = await buildDemoFrames(spec)
         if (disposed) return
         clearLocalSnapshot()
         useFlipbook.setState((s) => ({
           projectId: null,
           cloudStatus: "idle",
-          title: DEMO_TITLE,
-          fps: DEMO_FPS,
-          stagePresetId: DEMO_STAGE_PRESET,
+          title: spec.title,
+          fps: spec.fps,
+          stagePresetId: spec.stagePresetId,
           frames: demoFrames,
           currentId: demoFrames[0].id,
           histories: {},
@@ -146,7 +142,7 @@ export function Editor({
       unsubscribe?.()
       clearTimeout(timer)
     }
-  }, [initialProject, initialNew, initialDemo])
+  }, [initialProject, initialNew, initialDemoId])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

@@ -6,6 +6,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { db } from "@/db"
 import { frames, projects } from "@/db/schema"
 import { auth } from "@/lib/auth"
+import { getDemo } from "@/lib/flipbook/demos"
 import { getStagePreset, type FrameJSON } from "@/lib/flipbook/store"
 import { Editor, type InitialProject } from "@/components/workshop/editor"
 
@@ -66,11 +67,16 @@ export default async function WorkshopPage({
         }
       : undefined
 
+  const initialDemoId =
+    !initialProject && !initialNew && demo && getDemo(demo)
+      ? getDemo(demo)!.id
+      : undefined
+
   return (
     <Editor
       initialProject={initialProject}
       initialNew={initialNew}
-      initialDemo={!initialProject && !initialNew && demo === "1"}
+      initialDemoId={initialDemoId}
     />
   )
 }

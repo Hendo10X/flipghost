@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
 
-import { DemoPlayer } from "@/components/landing/demo-player"
 import { LandingNav } from "@/components/landing/landing-nav"
+import { ShowcaseGrid } from "@/components/landing/showcase-grid"
 
 export const metadata: Metadata = {
   title: "Showcase | Flipghost",
   description:
-    "A bouncing ball with squash and stretch, drawn frame by frame in Flipghost. Play it, scrub it, and open it in the workshop.",
+    "Animations built frame by frame in Flipghost. Hover to play, then open any of them in the workshop.",
 }
 
 export default function ShowcasePage() {
@@ -14,19 +14,18 @@ export default function ShowcasePage() {
     <div className="flex min-h-dvh flex-col">
       <LandingNav />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-20">
-        <div className="mb-8 flex flex-col gap-3 text-center">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-20">
+        <div className="mb-10 flex flex-col gap-3 text-center">
           <h1 className="font-display text-3xl leading-[1.1] font-normal tracking-tight text-balance sm:text-4xl">
-            A bouncing ball, twelve frames
+            Made in Flipghost
           </h1>
           <p className="mx-auto max-w-md text-base leading-relaxed text-pretty text-muted-foreground">
-            The classic animation exercise: squash on impact, stretch through
-            the fall, and a held beat at the apex. Pause it and flip on onion
-            skinning to see how the ghosts guide each in-between.
+            Every one of these is a real project, drawn frame by frame. Hover to
+            play, then open one in the workshop and take it apart.
           </p>
         </div>
 
-        <DemoPlayer />
+        <ShowcaseGrid />
       </main>
     </div>
   )
