@@ -13,7 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { buildDemoFrames, getDemo } from "@/lib/flipbook/demos"
 import { cn } from "@/lib/utils"
 
-const PREVIEW_WIDTH = 300
+const PREVIEW_WIDTH = 420
 const GHOST_PREV = "#ef4444"
 const GHOST_NEXT = "#22c55e"
 
@@ -97,13 +97,13 @@ export function HeroDemo({ className }: { className?: string }) {
       )}
     >
       {/* Title bar */}
-      <div className="flex h-9 items-center gap-2 border-b px-3">
+      <div className="flex h-10 items-center gap-2 border-b px-4">
         <HugeiconsIcon
           icon={GhostIcon}
-          className="size-3.5 shrink-0"
+          className="size-4 shrink-0"
           strokeWidth={2}
         />
-        <span className="truncate text-xs font-medium">Bouncing ball</span>
+        <span className="truncate text-sm font-medium">Bouncing ball</span>
         <div className="ml-auto flex items-center gap-1.5">
           <span className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground">
             GIF
@@ -116,31 +116,31 @@ export function HeroDemo({ className }: { className?: string }) {
 
       <div className="flex">
         {/* Toolbar */}
-        <div className="flex w-9 shrink-0 flex-col items-center gap-1 border-r py-2">
+        <div className="flex w-12 shrink-0 flex-col items-center gap-1 border-r py-3">
           {[Cursor01Icon, PencilEdit02Icon, EraserIcon].map((icon, i) => (
             <span
               key={i}
               className={cn(
-                "flex size-6 items-center justify-center rounded-md",
+                "flex size-8 items-center justify-center rounded-md",
                 i === 1 ? "bg-muted text-foreground" : "text-muted-foreground"
               )}
             >
-              <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={1.8} />
+              <HugeiconsIcon icon={icon} className="size-4" strokeWidth={1.8} />
             </span>
           ))}
-          <span className="my-1 h-px w-4 bg-border" />
-          <span className="size-3 rounded-full bg-sky-500 ring-1 ring-black/10 dark:ring-white/20" />
+          <span className="my-1.5 h-px w-6 bg-border" />
+          <span className="size-4 rounded-full bg-sky-500 ring-1 ring-black/10 dark:ring-white/20" />
           <span className="my-1 h-px w-4 bg-border" />
           {["size-1", "size-1.5", "size-2.5"].map((size, i) => (
-            <span key={i} className="flex size-5 items-center justify-center">
+            <span key={i} className="flex size-6 items-center justify-center">
               <span className={cn("rounded-full bg-muted-foreground", size)} />
             </span>
           ))}
         </div>
 
         {/* Canvas */}
-        <div className="flex flex-1 items-center justify-center bg-muted/40 p-4">
-          <div className="relative aspect-square w-full max-w-[220px] overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/10">
+        <div className="flex flex-1 items-center justify-center bg-muted/40 p-6 sm:p-8">
+          <div className="relative aspect-square w-full max-w-[340px] overflow-hidden rounded-lg bg-white shadow-sm ring-1 ring-black/10">
             {assets && (
               <>
                 {/* eslint-disable-next-line @next/next/no-img-element -- data URL, not optimizable */}
@@ -168,7 +168,7 @@ export function HeroDemo({ className }: { className?: string }) {
       </div>
 
       {/* Timeline */}
-      <div className="flex items-center gap-2 border-t px-3 py-2">
+      <div className="flex items-center gap-2.5 border-t px-4 py-2.5">
         <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary text-primary-foreground">
           <HugeiconsIcon icon={PlayIcon} className="size-2.5" strokeWidth={2} />
         </span>
@@ -185,7 +185,7 @@ export function HeroDemo({ className }: { className?: string }) {
             <span
               key={i}
               className={cn(
-                "size-7 shrink-0 overflow-hidden rounded bg-white ring-1 ring-black/10 dark:ring-white/15",
+                "size-9 shrink-0 overflow-hidden rounded bg-white ring-1 ring-black/10 dark:ring-white/15",
                 i === index && "ring-2 ring-primary dark:ring-primary"
               )}
             >
