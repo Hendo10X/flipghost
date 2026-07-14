@@ -6,7 +6,7 @@ import { and, asc, eq } from "drizzle-orm"
 import { db } from "@/db"
 import { frames, projects } from "@/db/schema"
 import { auth } from "@/lib/auth"
-import type { FrameJSON } from "@/lib/flipbook/store"
+import { getStagePreset, type FrameJSON } from "@/lib/flipbook/store"
 import { Editor, type InitialProject } from "@/components/workshop/editor"
 
 export const metadata: Metadata = {
@@ -47,9 +47,9 @@ async function loadProject(id: string): Promise<InitialProject | null> {
 export default async function WorkshopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ p?: string }>
+  searchParams: Promise<{ p?: string; new?: string }>
 }) {
-  const { p } = await searchParams
+  const { p, new: newSize } = await searchParams
   let initialProject: InitialProject | null = null
 
   if (p) {
@@ -57,5 +57,14 @@ export default async function WorkshopPage({
     if (!initialProject) redirect("/projects")
   }
 
-  return <Editor initialProject={initialProject} />
+  // A "new" animation starts on a blank canvas at the chosen size.
+  const initialStagePresetId =
+    !initialProject && newSize ? getStagePreset(newSize).id : undefined
+
+  return (
+    <Editor
+      initialProject={initialProject}
+      initialStagePresetId={initialStagePresetId}
+    />
+  )
 }

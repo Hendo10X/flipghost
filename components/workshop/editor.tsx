@@ -4,11 +4,12 @@ import { useEffect } from "react"
 
 import { saveProjectToCloud } from "@/lib/flipbook/cloud"
 import {
+  clearLocalSnapshot,
   loadLocalSnapshot,
   saveLocalSnapshot,
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
-import { useFlipbook, type Frame } from "@/lib/flipbook/store"
+import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
 import { WorkshopHeader } from "@/components/workshop/header"
@@ -25,8 +26,10 @@ export interface InitialProject {
 
 export function Editor({
   initialProject,
+  initialStagePresetId,
 }: {
   initialProject?: InitialProject | null
+  initialStagePresetId?: string
 }) {
   // --- Hydration + autosave ---
   useEffect(() => {
@@ -44,6 +47,21 @@ export function Editor({
           stagePresetId: initialProject.stagePresetId,
           frames: initialProject.frames,
           currentId: initialProject.frames[0].id,
+          histories: {},
+          revision: s.revision + 1,
+        }))
+      } else if (initialStagePresetId) {
+        // Fresh "New animation" at a chosen size: blank canvas, clean slate.
+        const frame: Frame = { id: crypto.randomUUID(), json: null, dataUrl: null }
+        clearLocalSnapshot()
+        useFlipbook.setState((s) => ({
+          projectId: null,
+          cloudStatus: "idle",
+          title: "Untitled Animation",
+          fps: 12,
+          stagePresetId: getStagePreset(initialStagePresetId).id,
+          frames: [frame],
+          currentId: frame.id,
           histories: {},
           revision: s.revision + 1,
         }))
@@ -112,7 +130,7 @@ export function Editor({
       unsubscribe?.()
       clearTimeout(timer)
     }
-  }, [initialProject])
+  }, [initialProject, initialStagePresetId])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

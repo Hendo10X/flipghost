@@ -3,7 +3,7 @@ import { headers } from "next/headers"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { desc, eq, inArray } from "drizzle-orm"
-import { GhostIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
+import { GhostIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { db } from "@/db"
@@ -11,6 +11,7 @@ import { frames, projects } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { getStagePreset } from "@/lib/flipbook/store"
 import { Button } from "@/components/ui/button"
+import { NewAnimationButton } from "@/components/projects/new-animation-button"
 import { ProjectCard } from "@/components/projects/project-card"
 import { UserAvatar } from "@/components/user-avatar"
 
@@ -75,14 +76,11 @@ export default async function ProjectsPage() {
           Flipghost
         </Link>
         <div className="flex items-center gap-3">
-          <Button render={<Link href="/workshop" />} size="lg" className="px-3">
-            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />
-            New animation
-          </Button>
+          <NewAnimationButton />
           <Link
             href="/profile"
             aria-label="Profile and settings"
-            className="rounded-full outline-none ring-offset-2 ring-offset-background transition-shadow hover:ring-2 hover:ring-ring/40 focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-8 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <UserAvatar seed={session.user.id} size={28} className="rounded-full" />
           </Link>
