@@ -27,7 +27,7 @@ export function getStagePreset(id: string): StagePreset {
   return STAGE_PRESETS.find((p) => p.id === id) ?? STAGE_PRESETS[0]
 }
 
-export type Tool = "brush" | "eraser"
+export type Tool = "brush" | "eraser" | "select"
 
 export type FrameJSON = Record<string, unknown>
 
@@ -75,8 +75,13 @@ interface FlipbookState {
   stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
+  /** Cloud project id once saved; null means local scratch work. */
+  projectId: string | null
+  cloudStatus: "idle" | "saving" | "saved" | "error"
   histories: Record<string, FrameHistory>
 
+  setProjectId: (id: string | null) => void
+  setCloudStatus: (status: "idle" | "saving" | "saved" | "error") => void
   setStagePreset: (id: string) => void
   requestImport: (dataUrl: string) => void
   clearPendingImport: () => void
@@ -118,8 +123,12 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   brushSize: 8,
   stagePresetId: "square",
   pendingImport: null,
+  projectId: null,
+  cloudStatus: "idle",
   histories: {},
 
+  setProjectId: (projectId) => set({ projectId }),
+  setCloudStatus: (cloudStatus) => set({ cloudStatus }),
   setStagePreset: (id) =>
     set({ stagePresetId: getStagePreset(id).id }),
   requestImport: (dataUrl) => set({ pendingImport: dataUrl }),

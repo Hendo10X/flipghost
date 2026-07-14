@@ -113,9 +113,15 @@ export function CanvasStage() {
       commitRef.current = commit
 
       canvas.on("path:created", ({ path }) => {
-        path.set({ selectable: false, perPixelTargetFind: true })
+        path.set({
+          selectable: useFlipbook.getState().tool === "select",
+          perPixelTargetFind: true,
+        })
         commit()
       })
+
+      // Moving/scaling/rotating with the select tool.
+      canvas.on("object:modified", () => commit())
 
       // Stroke eraser: drag over strokes to remove them.
       let erasing = false
@@ -207,7 +213,7 @@ export function CanvasStage() {
         scaleY: fit,
         left: (stageW - (image.width || 0) * fit) / 2,
         top: (stageH - (image.height || 0) * fit) / 2,
-        selectable: false,
+        selectable: state.tool === "select",
         perPixelTargetFind: true,
       })
       canvas.add(image)
@@ -228,16 +234,56 @@ export function CanvasStage() {
     if (!canvas || !ready) return
     if (tool === "brush") {
       canvas.isDrawingMode = true
-    } else {
+      canvas.selection = false
+    } else if (tool === "eraser") {
       canvas.isDrawingMode = false
+      canvas.selection = false
       canvas.defaultCursor = "crosshair"
       canvas.hoverCursor = "crosshair"
+    } else {
+      canvas.isDrawingMode = false
+      canvas.selection = true
+      canvas.defaultCursor = "default"
+      canvas.hoverCursor = "move"
     }
+    canvas.forEachObject((obj) => {
+      obj.set({ selectable: tool === "select" })
+    })
+    if (tool !== "select") {
+      canvas.discardActiveObject()
+    }
+    canvas.requestRenderAll()
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.color = brushColor
       canvas.freeDrawingBrush.width = brushSize
     }
   }, [tool, brushColor, brushSize, ready])
+
+  // --- Select-tool keyboard: delete selection, escape to deselect ---
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const canvas = fabricRef.current
+      if (!canvas || !ready) return
+      const target = e.target as HTMLElement | null
+      if (target?.closest("input, textarea, [contenteditable=true]")) return
+      if (useFlipbook.getState().tool !== "select") return
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        const selected = canvas.getActiveObjects()
+        if (selected.length === 0) return
+        e.preventDefault()
+        canvas.discardActiveObject()
+        selected.forEach((obj) => canvas.remove(obj))
+        canvas.requestRenderAll()
+        commitRef.current?.()
+      } else if (e.key === "Escape") {
+        canvas.discardActiveObject()
+        canvas.requestRenderAll()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [ready])
 
   // --- Load the current frame into the canvas ---
   useEffect(() => {
@@ -254,7 +300,10 @@ export function CanvasStage() {
         await canvas.loadFromJSON(frame.json as object)
         if (cancelled) return
         canvas.forEachObject((obj) => {
-          obj.set({ selectable: false, perPixelTargetFind: true })
+          obj.set({
+            selectable: state.tool === "select",
+            perPixelTargetFind: true,
+          })
         })
       }
       canvas.requestRenderAll()

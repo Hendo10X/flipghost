@@ -2,6 +2,7 @@
 
 import {
   BrushCleaningIcon,
+  Cursor01Icon,
   EraserIcon,
   PencilEdit02Icon,
   Redo02Icon,
@@ -24,6 +25,7 @@ const BRUSH_SIZES = [4, 8, 16, 32] as const
 const DOT_CLASSES = ["size-1", "size-1.5", "size-2.5", "size-3.5"] as const
 
 const TOOLS: { tool: Tool; label: string; icon: typeof PencilEdit02Icon }[] = [
+  { tool: "select", label: "Select (V)", icon: Cursor01Icon },
   { tool: "brush", label: "Brush (B)", icon: PencilEdit02Icon },
   { tool: "eraser", label: "Eraser (E)", icon: EraserIcon },
 ]

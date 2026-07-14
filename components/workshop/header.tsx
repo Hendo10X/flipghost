@@ -3,6 +3,9 @@
 import { useRef, useState } from "react"
 import Link from "next/link"
 import {
+  Album01Icon,
+  CloudSavingDone01Icon,
+  CloudUploadIcon,
   Film01Icon,
   GhostIcon,
   Gif01Icon,
@@ -12,6 +15,8 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
+import { saveProjectToCloud } from "@/lib/flipbook/cloud"
+import { clearLocalSnapshot } from "@/lib/flipbook/persistence"
 import {
   downloadBlob,
   exportGif,
@@ -48,6 +53,8 @@ export function WorkshopHeader() {
   const stagePresetId = useFlipbook((s) => s.stagePresetId)
   const setStagePreset = useFlipbook((s) => s.setStagePreset)
   const requestImport = useFlipbook((s) => s.requestImport)
+  const projectId = useFlipbook((s) => s.projectId)
+  const cloudStatus = useFlipbook((s) => s.cloudStatus)
   const { data: session } = useSession()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -78,6 +85,30 @@ export function WorkshopHeader() {
       setExportError(`${format.toUpperCase()} export failed. Please try again.`)
     } finally {
       setExporting(null)
+    }
+  }
+
+  async function handleSave() {
+    const state = useFlipbook.getState()
+    if (state.cloudStatus === "saving") return
+    state.setCloudStatus("saving")
+    try {
+      const wasScratch = state.projectId === null
+      const { id } = await saveProjectToCloud({
+        projectId: state.projectId,
+        title: state.title,
+        fps: state.fps,
+        stagePresetId: state.stagePresetId,
+        frames: state.frames,
+      })
+      state.setProjectId(id)
+      useFlipbook.getState().setCloudStatus("saved")
+      // Keep the URL shareable across refreshes without remounting the page.
+      window.history.replaceState(null, "", `/workshop?p=${id}`)
+      // The scratch pad now lives in the cloud; don't resurrect a stale copy.
+      if (wasScratch) clearLocalSnapshot()
+    } catch {
+      useFlipbook.getState().setCloudStatus("error")
     }
   }
 
@@ -137,6 +168,49 @@ export function WorkshopHeader() {
           <span role="alert" className="text-xs text-destructive">
             {exportError}
           </span>
+        )}
+
+        {session && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="lg"
+                  disabled={cloudStatus === "saving"}
+                  onClick={handleSave}
+                  aria-label="Save to cloud"
+                >
+                  {cloudStatus === "saving" ? (
+                    <HugeiconsIcon
+                      icon={Loading03Icon}
+                      className="animate-spin"
+                      strokeWidth={1.8}
+                    />
+                  ) : cloudStatus === "saved" && projectId ? (
+                    <HugeiconsIcon
+                      icon={CloudSavingDone01Icon}
+                      strokeWidth={1.8}
+                    />
+                  ) : (
+                    <HugeiconsIcon icon={CloudUploadIcon} strokeWidth={1.8} />
+                  )}
+                  {cloudStatus === "saving"
+                    ? "Saving"
+                    : cloudStatus === "saved" && projectId
+                      ? "Saved"
+                      : cloudStatus === "error"
+                        ? "Retry save"
+                        : "Save"}
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">
+              {projectId
+                ? "Changes save automatically"
+                : "Save to your animations"}
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {session ? (
@@ -260,6 +334,22 @@ export function WorkshopHeader() {
 
         {session ? (
           <div className="flex items-center gap-1.5">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    render={<Link href="/projects" />}
+                    aria-label="My animations"
+                    className="text-muted-foreground"
+                  >
+                    <HugeiconsIcon icon={Album01Icon} strokeWidth={1.8} />
+                  </Button>
+                }
+              />
+              <TooltipContent side="bottom">My animations</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 render={

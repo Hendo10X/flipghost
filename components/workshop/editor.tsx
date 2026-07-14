@@ -2,14 +2,118 @@
 
 import { useEffect } from "react"
 
-import { useFlipbook } from "@/lib/flipbook/store"
+import { saveProjectToCloud } from "@/lib/flipbook/cloud"
+import {
+  loadLocalSnapshot,
+  saveLocalSnapshot,
+  snapshotFromState,
+} from "@/lib/flipbook/persistence"
+import { useFlipbook, type Frame } from "@/lib/flipbook/store"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
 import { WorkshopHeader } from "@/components/workshop/header"
 import { Timeline } from "@/components/workshop/timeline"
 import { Toolbar } from "@/components/workshop/toolbar"
 
-export function Editor() {
+export interface InitialProject {
+  id: string
+  title: string
+  fps: number
+  stagePresetId: string
+  frames: Frame[]
+}
+
+export function Editor({
+  initialProject,
+}: {
+  initialProject?: InitialProject | null
+}) {
+  // --- Hydration + autosave ---
+  useEffect(() => {
+    let disposed = false
+    let unsubscribe: (() => void) | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    async function boot() {
+      if (initialProject && initialProject.frames.length > 0) {
+        useFlipbook.setState((s) => ({
+          projectId: initialProject.id,
+          cloudStatus: "saved",
+          title: initialProject.title,
+          fps: initialProject.fps,
+          stagePresetId: initialProject.stagePresetId,
+          frames: initialProject.frames,
+          currentId: initialProject.frames[0].id,
+          histories: {},
+          revision: s.revision + 1,
+        }))
+      } else {
+        const snapshot = await loadLocalSnapshot()
+        if (disposed) return
+        if (snapshot && useFlipbook.getState().projectId === null) {
+          useFlipbook.setState((s) => ({
+            ...snapshot,
+            histories: {},
+            revision: s.revision + 1,
+          }))
+        }
+      }
+
+      // Watch the persistable slice; ignore tool/playback churn.
+      let previous = snapshotFromState(useFlipbook.getState())
+      unsubscribe = useFlipbook.subscribe((state) => {
+        const next = snapshotFromState(state)
+        const changed =
+          next.frames !== previous.frames ||
+          next.title !== previous.title ||
+          next.fps !== previous.fps ||
+          next.stagePresetId !== previous.stagePresetId ||
+          next.currentId !== previous.currentId ||
+          next.onionSkin !== previous.onionSkin ||
+          next.brushColor !== previous.brushColor ||
+          next.brushSize !== previous.brushSize
+        if (!changed) return
+
+        const contentChanged =
+          next.frames !== previous.frames ||
+          next.title !== previous.title ||
+          next.fps !== previous.fps ||
+          next.stagePresetId !== previous.stagePresetId
+        previous = next
+
+        clearTimeout(timer)
+        timer = setTimeout(async () => {
+          const s = useFlipbook.getState()
+          if (s.projectId) {
+            if (!contentChanged) return
+            s.setCloudStatus("saving")
+            try {
+              await saveProjectToCloud({
+                projectId: s.projectId,
+                title: s.title,
+                fps: s.fps,
+                stagePresetId: s.stagePresetId,
+                frames: s.frames,
+              })
+              useFlipbook.getState().setCloudStatus("saved")
+            } catch {
+              useFlipbook.getState().setCloudStatus("error")
+            }
+          } else {
+            saveLocalSnapshot(snapshotFromState(s))
+          }
+        }, 1500)
+      })
+    }
+
+    boot()
+    return () => {
+      disposed = true
+      unsubscribe?.()
+      clearTimeout(timer)
+    }
+  }, [initialProject])
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
@@ -35,6 +139,9 @@ export function Editor() {
         case " ":
           e.preventDefault()
           s.setPlaying(!s.playing)
+          break
+        case "v":
+          s.setTool("select")
           break
         case "b":
           s.setTool("brush")
