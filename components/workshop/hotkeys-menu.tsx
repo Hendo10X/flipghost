@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useSyncExternalStore } from "react"
-import { KeyboardIcon, Refresh01Icon } from "@hugeicons/core-free-icons"
+import { CommandIcon, Refresh01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
@@ -98,7 +98,7 @@ export function HotkeysMenu() {
       <PopoverTrigger
         render={
           <Button variant="outline" size="lg" aria-label="Keyboard shortcuts">
-            <HugeiconsIcon icon={KeyboardIcon} strokeWidth={1.8} />
+            <HugeiconsIcon icon={CommandIcon} strokeWidth={1.8} />
             Hotkeys
           </Button>
         }

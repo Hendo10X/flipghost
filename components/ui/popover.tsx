@@ -26,11 +26,18 @@ function PopoverContent({
 }) {
   return (
     <PopoverPrimitive.Portal>
-      <PopoverPrimitive.Positioner side={side} align={align} sideOffset={sideOffset}>
+      {/* z-index belongs on the Positioner: the Popup is position:static, so a
+          z-index there would do nothing and content could paint over it. */}
+      <PopoverPrimitive.Positioner
+        side={side}
+        align={align}
+        sideOffset={sideOffset}
+        className="z-50"
+      >
         <PopoverPrimitive.Popup
           data-slot="popover-content"
           className={cn(
-            "z-50 rounded-lg border bg-popover p-3 text-popover-foreground shadow-md outline-none",
+            "rounded-lg border bg-popover p-3 text-popover-foreground shadow-md outline-none",
             "[transform-origin:var(--transform-origin)] transition-[transform,opacity] duration-150 ease-out",
             "data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0",
             "data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0",

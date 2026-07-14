@@ -28,11 +28,16 @@ function TooltipContent({
 }) {
   return (
     <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Positioner side={side} sideOffset={sideOffset}>
+      {/* z-index belongs on the Positioner; the Popup is position:static. */}
+      <TooltipPrimitive.Positioner
+        side={side}
+        sideOffset={sideOffset}
+        className="z-50"
+      >
         <TooltipPrimitive.Popup
           data-slot="tooltip-content"
           className={cn(
-            "z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-md select-none",
+            "rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-md select-none",
             "[transform-origin:var(--transform-origin)] transition-[transform,opacity] duration-[125ms] ease-out",
             "data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0",
             "data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0",
