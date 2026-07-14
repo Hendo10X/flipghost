@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react"
 import {
+  ArrowDown01Icon,
   Copy01Icon,
   Delete02Icon,
   GhostIcon,
@@ -11,14 +12,135 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
-import { FPS_OPTIONS, useFlipbook } from "@/lib/flipbook/store"
+import { FPS_OPTIONS, ONION_MAX, useFlipbook } from "@/lib/flipbook/store"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Slider } from "@/components/ui/slider"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+
+const ONION_COUNTS = Array.from({ length: ONION_MAX + 1 }, (_, i) => i)
+
+/** Popover for how many frames to ghost on each side, and how strongly. */
+function OnionSettings() {
+  const onionBefore = useFlipbook((s) => s.onionBefore)
+  const onionAfter = useFlipbook((s) => s.onionAfter)
+  const onionOpacity = useFlipbook((s) => s.onionOpacity)
+  const setOnionBefore = useFlipbook((s) => s.setOnionBefore)
+  const setOnionAfter = useFlipbook((s) => s.setOnionAfter)
+  const setOnionOpacity = useFlipbook((s) => s.setOnionOpacity)
+
+  const rows: {
+    label: string
+    hint: string
+    value: number
+    onChange: (n: number) => void
+  }[] = [
+    {
+      label: "Before",
+      hint: "bg-red-500",
+      value: onionBefore,
+      onChange: setOnionBefore,
+    },
+    {
+      label: "After",
+      hint: "bg-green-500",
+      value: onionAfter,
+      onChange: setOnionAfter,
+    },
+  ]
+
+  return (
+    <Popover>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Onion skin settings"
+                  className="text-muted-foreground"
+                >
+                  <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+                </Button>
+              }
+            />
+          }
+        />
+        <TooltipContent>Onion skin settings</TooltipContent>
+      </Tooltip>
+
+      <PopoverContent side="top" align="start" className="w-60">
+        <div className="flex flex-col gap-4">
+          {rows.map((row) => (
+            <div key={row.label} className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <span className={cn("size-2 rounded-full", row.hint)} />
+                <span className="text-xs font-medium">{row.label}</span>
+                <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                  {row.value === 0
+                    ? "off"
+                    : `${row.value} frame${row.value > 1 ? "s" : ""}`}
+                </span>
+              </div>
+              <div
+                role="radiogroup"
+                aria-label={`Frames ghosted ${row.label.toLowerCase()}`}
+                className="flex items-center gap-0.5 rounded-md bg-muted p-0.5"
+              >
+                {ONION_COUNTS.map((count) => (
+                  <button
+                    key={count}
+                    type="button"
+                    role="radio"
+                    aria-checked={row.value === count}
+                    onClick={() => row.onChange(count)}
+                    className={cn(
+                      "flex-1 rounded-[5px] py-0.5 text-xs tabular-nums transition-colors select-none",
+                      row.value === count
+                        ? "bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {count}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center">
+              <span className="text-xs font-medium">Opacity</span>
+              <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                {Math.round(onionOpacity * 100)}%
+              </span>
+            </div>
+            <Slider
+              value={onionOpacity}
+              onValueChange={(value) =>
+                setOnionOpacity(Array.isArray(value) ? value[0] : value)
+              }
+              min={0.05}
+              max={0.8}
+              step={0.05}
+            />
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export function Timeline() {
   const frames = useFlipbook((s) => s.frames)
@@ -48,6 +170,7 @@ export function Timeline() {
               <Button
                 size="icon-lg"
                 aria-label={playing ? "Pause" : "Play"}
+                data-cuelume-toggle
                 onClick={() => setPlaying(!playing)}
               >
                 <HugeiconsIcon
@@ -102,6 +225,7 @@ export function Timeline() {
                 variant="ghost"
                 size="sm"
                 aria-pressed={onionSkin}
+                data-cuelume-toggle
                 onClick={toggleOnionSkin}
                 className={cn(
                   "text-muted-foreground",
@@ -117,6 +241,8 @@ export function Timeline() {
             Show the previous and next frames as ghosts
           </TooltipContent>
         </Tooltip>
+
+        <OnionSettings />
 
         <div className="ml-auto flex items-center gap-1">
           <Tooltip>
@@ -212,6 +338,8 @@ export function Timeline() {
               <Button
                 variant="outline"
                 aria-label="Add frame"
+                data-cuelume-press
+                data-cuelume-release
                 onClick={addFrame}
                 className="size-16 shrink-0 rounded-lg border-dashed text-muted-foreground"
               >

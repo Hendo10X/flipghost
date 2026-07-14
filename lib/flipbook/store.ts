@@ -5,6 +5,22 @@ export const SNAPSHOT_SIZE = 720
 
 export const FPS_OPTIONS = [12, 24, 30] as const
 
+/** Most frames that can be ghosted on each side of the current one. */
+export const ONION_MAX = 3
+
+export const ZOOM_MIN = 0.25
+export const ZOOM_MAX = 8
+
+function clamp(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, value))
+}
+
+/** Ghost opacity for the nth neighbouring frame (1 = adjacent). */
+export function onionStepOpacity(base: number, step: number) {
+  return base * Math.pow(0.55, step - 1)
+}
+
 export interface StagePreset {
   id: string
   label: string
@@ -27,7 +43,7 @@ export function getStagePreset(id: string): StagePreset {
   return STAGE_PRESETS.find((p) => p.id === id) ?? STAGE_PRESETS[0]
 }
 
-export type Tool = "brush" | "eraser"
+export type Tool = "brush" | "eraser" | "select"
 
 export type FrameJSON = Record<string, unknown>
 
@@ -69,14 +85,26 @@ interface FlipbookState {
   fps: number
   playing: boolean
   onionSkin: boolean
+  /** How many frames before/after the current one to ghost (0-3). */
+  onionBefore: number
+  onionAfter: number
+  /** Opacity of the nearest ghost; further ones fall off from here. */
+  onionOpacity: number
+  /** Viewport zoom, where 1 fits the stage to the viewport. */
+  zoom: number
   tool: Tool
   brushColor: string
   brushSize: number
   stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
+  /** Cloud project id once saved; null means local scratch work. */
+  projectId: string | null
+  cloudStatus: "idle" | "saving" | "saved" | "error"
   histories: Record<string, FrameHistory>
 
+  setProjectId: (id: string | null) => void
+  setCloudStatus: (status: "idle" | "saving" | "saved" | "error") => void
   setStagePreset: (id: string) => void
   requestImport: (dataUrl: string) => void
   clearPendingImport: () => void
@@ -87,6 +115,10 @@ interface FlipbookState {
   setFps: (fps: number) => void
   setPlaying: (playing: boolean) => void
   toggleOnionSkin: () => void
+  setOnionBefore: (count: number) => void
+  setOnionAfter: (count: number) => void
+  setOnionOpacity: (opacity: number) => void
+  setZoom: (zoom: number) => void
 
   selectFrame: (id: string) => void
   addFrame: () => void
@@ -113,13 +145,21 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   fps: 12,
   playing: false,
   onionSkin: true,
+  onionBefore: 1,
+  onionAfter: 1,
+  onionOpacity: 0.3,
+  zoom: 1,
   tool: "brush",
   brushColor: "#1a1a1a",
   brushSize: 8,
   stagePresetId: "square",
   pendingImport: null,
+  projectId: null,
+  cloudStatus: "idle",
   histories: {},
 
+  setProjectId: (projectId) => set({ projectId }),
+  setCloudStatus: (cloudStatus) => set({ cloudStatus }),
   setStagePreset: (id) =>
     set({ stagePresetId: getStagePreset(id).id }),
   requestImport: (dataUrl) => set({ pendingImport: dataUrl }),
@@ -131,6 +171,13 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   setFps: (fps) => set({ fps }),
   setPlaying: (playing) => set({ playing }),
   toggleOnionSkin: () => set((s) => ({ onionSkin: !s.onionSkin })),
+  setOnionBefore: (count) =>
+    set({ onionBefore: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionAfter: (count) =>
+    set({ onionAfter: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionOpacity: (opacity) =>
+    set({ onionOpacity: clamp(opacity, 0.05, 0.8) }),
+  setZoom: (zoom) => set({ zoom: clamp(zoom, ZOOM_MIN, ZOOM_MAX) }),
 
   selectFrame: (id) => {
     if (get().frames.some((f) => f.id === id)) set({ currentId: id })

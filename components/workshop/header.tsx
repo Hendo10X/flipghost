@@ -3,6 +3,9 @@
 import { useRef, useState } from "react"
 import Link from "next/link"
 import {
+  Album01Icon,
+  CloudSavingDone01Icon,
+  CloudUploadIcon,
   Film01Icon,
   GhostIcon,
   Gif01Icon,
@@ -12,6 +15,8 @@ import {
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
+import { saveProjectToCloud } from "@/lib/flipbook/cloud"
+import { clearLocalSnapshot } from "@/lib/flipbook/persistence"
 import {
   downloadBlob,
   exportGif,
@@ -19,8 +24,10 @@ import {
   type ExportFormat,
 } from "@/lib/flipbook/export"
 import { getStagePreset, STAGE_PRESETS, useFlipbook } from "@/lib/flipbook/store"
+import { cue } from "@/lib/sound"
 import { signOut, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
+import { UserAvatar } from "@/components/user-avatar"
 import {
   Select,
   SelectContent,
@@ -48,6 +55,8 @@ export function WorkshopHeader() {
   const stagePresetId = useFlipbook((s) => s.stagePresetId)
   const setStagePreset = useFlipbook((s) => s.setStagePreset)
   const requestImport = useFlipbook((s) => s.requestImport)
+  const projectId = useFlipbook((s) => s.projectId)
+  const cloudStatus = useFlipbook((s) => s.cloudStatus)
   const { data: session } = useSession()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -73,11 +82,37 @@ export function WorkshopHeader() {
         (p) => setExporting({ format, progress: p.value })
       )
       downloadBlob(blob, `${slugify(state.title)}.${format}`)
+      cue("success")
     } catch (error) {
       console.error(error)
       setExportError(`${format.toUpperCase()} export failed. Please try again.`)
     } finally {
       setExporting(null)
+    }
+  }
+
+  async function handleSave() {
+    const state = useFlipbook.getState()
+    if (state.cloudStatus === "saving") return
+    state.setCloudStatus("saving")
+    try {
+      const wasScratch = state.projectId === null
+      const { id } = await saveProjectToCloud({
+        projectId: state.projectId,
+        title: state.title,
+        fps: state.fps,
+        stagePresetId: state.stagePresetId,
+        frames: state.frames,
+      })
+      state.setProjectId(id)
+      useFlipbook.getState().setCloudStatus("saved")
+      // Keep the URL shareable across refreshes without remounting the page.
+      window.history.replaceState(null, "", `/workshop?p=${id}`)
+      // The scratch pad now lives in the cloud; don't resurrect a stale copy.
+      if (wasScratch) clearLocalSnapshot()
+      cue("success")
+    } catch {
+      useFlipbook.getState().setCloudStatus("error")
     }
   }
 
@@ -95,8 +130,8 @@ export function WorkshopHeader() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <Link
-        href="/"
-        aria-label="Flipghost home"
+        href={session ? "/projects" : "/"}
+        aria-label={session ? "My animations" : "Flipghost home"}
         className="flex items-center gap-2 text-sm font-medium select-none"
       >
         <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
@@ -137,6 +172,49 @@ export function WorkshopHeader() {
           <span role="alert" className="text-xs text-destructive">
             {exportError}
           </span>
+        )}
+
+        {session && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="lg"
+                  disabled={cloudStatus === "saving"}
+                  onClick={handleSave}
+                  aria-label="Save to cloud"
+                >
+                  {cloudStatus === "saving" ? (
+                    <HugeiconsIcon
+                      icon={Loading03Icon}
+                      className="animate-spin"
+                      strokeWidth={1.8}
+                    />
+                  ) : cloudStatus === "saved" && projectId ? (
+                    <HugeiconsIcon
+                      icon={CloudSavingDone01Icon}
+                      strokeWidth={1.8}
+                    />
+                  ) : (
+                    <HugeiconsIcon icon={CloudUploadIcon} strokeWidth={1.8} />
+                  )}
+                  {cloudStatus === "saving"
+                    ? "Saving"
+                    : cloudStatus === "saved" && projectId
+                      ? "Saved"
+                      : cloudStatus === "error"
+                        ? "Retry save"
+                        : "Save"}
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">
+              {projectId
+                ? "Changes save automatically"
+                : "Save to your animations"}
+            </TooltipContent>
+          </Tooltip>
         )}
 
         {session ? (
@@ -263,10 +341,28 @@ export function WorkshopHeader() {
             <Tooltip>
               <TooltipTrigger
                 render={
-                  <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium uppercase select-none" />
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    render={<Link href="/projects" />}
+                    aria-label="My animations"
+                    className="text-muted-foreground"
+                  >
+                    <HugeiconsIcon icon={Album01Icon} strokeWidth={1.8} />
+                  </Button>
                 }
+              />
+              <TooltipContent side="bottom">My animations</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={<span className="inline-flex select-none" />}
               >
-                {(session.user.name || session.user.email).slice(0, 1)}
+                <UserAvatar
+                  seed={session.user.id}
+                  size={24}
+                  className="rounded-full"
+                />
               </TooltipTrigger>
               <TooltipContent side="bottom">
                 {session.user.email}
@@ -279,7 +375,15 @@ export function WorkshopHeader() {
                     variant="ghost"
                     size="icon-lg"
                     aria-label="Sign out"
-                    onClick={() => signOut()}
+                    onClick={() =>
+                      signOut({
+                        fetchOptions: {
+                          onSuccess: () => {
+                            window.location.href = "/"
+                          },
+                        },
+                      })
+                    }
                     className="text-muted-foreground"
                   >
                     <HugeiconsIcon icon={Logout01Icon} strokeWidth={1.8} />

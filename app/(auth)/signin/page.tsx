@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Loading03Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -15,7 +16,22 @@ import { PasswordInput } from "@/components/ui/password-input"
 export default function SignInPage() {
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const [googlePending, setGooglePending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  async function onGoogle() {
+    if (googlePending) return
+    setGooglePending(true)
+    setError(null)
+    const { error } = await signIn.social({
+      provider: "google",
+      callbackURL: "/projects",
+    })
+    if (error) {
+      setError(error.message ?? "Google sign-in failed. Please try again.")
+      setGooglePending(false)
+    }
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -33,7 +49,7 @@ export default function SignInPage() {
       setPending(false)
       return
     }
-    router.push("/workshop")
+    router.push("/projects")
   }
 
   return (
@@ -88,6 +104,37 @@ export default function SignInPage() {
           Sign in
         </Button>
       </form>
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs text-muted-foreground select-none">or</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="lg"
+        disabled={googlePending}
+        onClick={onGoogle}
+        className="w-full"
+      >
+        {googlePending ? (
+          <HugeiconsIcon
+            icon={Loading03Icon}
+            className="size-3.5 animate-spin"
+          />
+        ) : (
+          <Image
+            src="/images/google.svg"
+            alt=""
+            width={14}
+            height={14}
+            className="size-3.5"
+          />
+        )}
+        Continue with Google
+      </Button>
 
       <p className="text-center text-xs text-muted-foreground">
         Don&apos;t have an account?{" "}
