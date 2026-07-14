@@ -26,10 +26,10 @@ export interface InitialProject {
 
 export function Editor({
   initialProject,
-  initialStagePresetId,
+  initialNew,
 }: {
   initialProject?: InitialProject | null
-  initialStagePresetId?: string
+  initialNew?: { stagePresetId: string; title: string }
 }) {
   // --- Hydration + autosave ---
   useEffect(() => {
@@ -50,16 +50,16 @@ export function Editor({
           histories: {},
           revision: s.revision + 1,
         }))
-      } else if (initialStagePresetId) {
-        // Fresh "New animation" at a chosen size: blank canvas, clean slate.
+      } else if (initialNew) {
+        // Fresh "New animation" at a chosen name/size: blank canvas, clean slate.
         const frame: Frame = { id: crypto.randomUUID(), json: null, dataUrl: null }
         clearLocalSnapshot()
         useFlipbook.setState((s) => ({
           projectId: null,
           cloudStatus: "idle",
-          title: "Untitled Animation",
+          title: initialNew.title,
           fps: 12,
-          stagePresetId: getStagePreset(initialStagePresetId).id,
+          stagePresetId: getStagePreset(initialNew.stagePresetId).id,
           frames: [frame],
           currentId: frame.id,
           histories: {},
@@ -130,7 +130,7 @@ export function Editor({
       unsubscribe?.()
       clearTimeout(timer)
     }
-  }, [initialProject, initialStagePresetId])
+  }, [initialProject, initialNew])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

@@ -47,9 +47,9 @@ async function loadProject(id: string): Promise<InitialProject | null> {
 export default async function WorkshopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ p?: string; new?: string }>
+  searchParams: Promise<{ p?: string; new?: string; title?: string }>
 }) {
-  const { p, new: newSize } = await searchParams
+  const { p, new: newSize, title } = await searchParams
   let initialProject: InitialProject | null = null
 
   if (p) {
@@ -57,14 +57,14 @@ export default async function WorkshopPage({
     if (!initialProject) redirect("/projects")
   }
 
-  // A "new" animation starts on a blank canvas at the chosen size.
-  const initialStagePresetId =
-    !initialProject && newSize ? getStagePreset(newSize).id : undefined
+  // A "new" animation starts on a blank canvas at the chosen size and name.
+  const initialNew =
+    !initialProject && newSize
+      ? {
+          stagePresetId: getStagePreset(newSize).id,
+          title: (title ?? "").trim().slice(0, 255) || "Untitled Animation",
+        }
+      : undefined
 
-  return (
-    <Editor
-      initialProject={initialProject}
-      initialStagePresetId={initialStagePresetId}
-    />
-  )
+  return <Editor initialProject={initialProject} initialNew={initialNew} />
 }
