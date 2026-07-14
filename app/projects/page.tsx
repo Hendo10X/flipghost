@@ -3,14 +3,13 @@ import { headers } from "next/headers"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { desc, eq, inArray } from "drizzle-orm"
-import { GhostIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 
 import { db } from "@/db"
 import { frames, projects } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { getStagePreset } from "@/lib/flipbook/store"
 import { Button } from "@/components/ui/button"
+import { Wordmark } from "@/components/wordmark"
 import { NewAnimationButton } from "@/components/projects/new-animation-button"
 import { ProjectCard } from "@/components/projects/project-card"
 import { UserAvatar } from "@/components/user-avatar"
@@ -68,12 +67,8 @@ export default async function ProjectsPage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-6 py-5">
-        <Link
-          href="/projects"
-          className="inline-flex items-center gap-2 text-sm font-medium select-none"
-        >
-          <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
-          Flipghost
+        <Link href="/projects" className="inline-flex">
+          <Wordmark />
         </Link>
         <div className="flex items-center gap-3">
           <NewAnimationButton />

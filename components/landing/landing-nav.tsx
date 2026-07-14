@@ -15,6 +15,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Button } from "@/components/ui/button"
+import { Wordmark } from "@/components/wordmark"
 import { cn } from "@/lib/utils"
 
 interface FeatureLink {
@@ -54,12 +55,8 @@ const triggerClass =
 export function LandingNav() {
   return (
     <header className="grid grid-cols-[1fr_auto_1fr] items-center px-6 py-4">
-      <Link
-        href="/"
-        className="col-start-1 flex items-center gap-2 justify-self-start text-sm font-medium select-none"
-      >
-        <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
-        Flipghost
+      <Link href="/" className="col-start-1 justify-self-start">
+        <Wordmark />
       </Link>
 
       <NavigationMenu.Root className="col-start-2 hidden justify-self-center md:block">
@@ -220,10 +217,7 @@ function MobileMenu() {
         >
           <Dialog.Title className="sr-only">Menu</Dialog.Title>
           <div className="mb-2 flex items-center justify-between">
-            <span className="flex items-center gap-2 text-sm font-medium select-none">
-              <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
-              Flipghost
-            </span>
+            <Wordmark />
             <Dialog.Close
               render={
                 <Button

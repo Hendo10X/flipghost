@@ -2,10 +2,11 @@ import type { Metadata } from "next"
 import { headers } from "next/headers"
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ArrowLeft01Icon, GhostIcon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { auth } from "@/lib/auth"
+import { Wordmark } from "@/components/wordmark"
 import { ProfileForm } from "@/components/profile/profile-form"
 
 export const metadata: Metadata = {
@@ -21,12 +22,8 @@ export default async function ProfilePage() {
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-6 py-5">
-        <Link
-          href="/projects"
-          className="inline-flex items-center gap-2 text-sm font-medium select-none"
-        >
-          <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
-          Flipghost
+        <Link href="/projects" className="inline-flex">
+          <Wordmark />
         </Link>
         <Link
           href="/projects"
