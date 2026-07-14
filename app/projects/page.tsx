@@ -69,7 +69,7 @@ export default async function ProjectsPage() {
     <div className="flex min-h-dvh flex-col">
       <header className="flex items-center justify-between px-6 py-5">
         <Link
-          href="/"
+          href="/projects"
           className="inline-flex items-center gap-2 text-sm font-medium select-none"
         >
           <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />

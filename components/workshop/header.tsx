@@ -130,8 +130,8 @@ export function WorkshopHeader() {
   return (
     <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
       <Link
-        href="/"
-        aria-label="Flipghost home"
+        href={session ? "/projects" : "/"}
+        aria-label={session ? "My animations" : "Flipghost home"}
         className="flex items-center gap-2 text-sm font-medium select-none"
       >
         <HugeiconsIcon icon={GhostIcon} className="size-4" strokeWidth={2} />
