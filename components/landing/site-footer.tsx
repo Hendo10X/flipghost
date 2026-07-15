@@ -18,8 +18,8 @@ const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] =
     links: [
       { label: "Documentation", href: "/docs" },
       { label: "Tutorials", href: "/tutorials" },
-      { label: "Onion skinning", href: "/docs" },
-      { label: "Keyboard shortcuts", href: "/docs" },
+      { label: "Onion skinning", href: "/docs/onion-skinning" },
+      { label: "Keyboard shortcuts", href: "/docs/shortcuts" },
     ],
   },
   {

@@ -1,0 +1,76 @@
+---
+title: The timeline
+description: Adding, duplicating, reordering, and playing back frames.
+---
+
+The timeline runs along the bottom of the workshop. The strip of thumbnails is
+your animation in order, left to right, and the controls above it decide how it
+plays.
+
+## Frames
+
+Click any thumbnail to jump to that frame. The counter to the right of the play
+button tells you where you are.
+
+| Action | How |
+| --- | --- |
+| Add a blank frame | The dashed button at the end of the strip, or <kbd>N</kbd> |
+| Duplicate the current frame | The duplicate button, top right of the timeline |
+| Delete the current frame | The bin button, top right of the timeline |
+| Previous frame | <kbd>←</kbd> |
+| Next frame | <kbd>→</kbd> |
+
+New and duplicated frames are inserted directly after the current one, not at
+the end, so you can work into the middle of a sequence without shuffling
+anything afterwards.
+
+### Duplicate, do not add
+
+Most of the time you want duplicate rather than add. Animation is mostly small
+changes to the frame before, so starting from a copy and altering it is faster
+than redrawing from nothing, and it keeps the parts that should not move from
+drifting around.
+
+Reach for a blank frame when the next drawing genuinely shares nothing with the
+last one, such as a hard cut.
+
+<Callout type="warn">
+  Deleting a frame cannot be undone. <kbd>Ctrl</kbd> <kbd>Z</kbd> only covers
+  strokes within a frame, so check the thumbnail before you press the bin.
+</Callout>
+
+## Reordering
+
+Drag a thumbnail along the strip to move it. The frame you are hovering shows a
+ring to mark where it will land. Release to drop.
+
+## Playback
+
+<kbd>Space</kbd> plays and pauses. Playback loops until you stop it, which is
+the point: a loop that reads well on repeat is the goal, and watching it once
+tells you very little.
+
+Onion skins are hidden during playback, so what you see is what you will
+export.
+
+Pausing returns you to the frame you were on when you pressed play, rather than
+leaving you wherever the playhead stopped.
+
+## Frame rate
+
+Three rates are available: 12, 24, and 30 frames per second. This is a property
+of the whole animation, not of individual frames.
+
+| Rate | What it means |
+| --- | --- |
+| 12 | The traditional choice for hand drawn animation. Half as many drawings, and it still reads as motion. Start here. |
+| 24 | Film rate. Smoother, and twice the work. |
+| 30 | Video rate. Smoothest, and the most drawings. |
+
+Twelve is where almost everyone should start. Hand drawn animation has run at
+twelve for a century because the eye fills in the gaps, and because drawing
+thirty frames per second of finished work is how projects die.
+
+The rate changes how fast your existing frames play. It does not add or remove
+drawings, so moving from 12 to 24 will run your loop twice as fast rather than
+making it smoother.

@@ -1,0 +1,56 @@
+---
+title: Exporting
+description: Getting a looping GIF or an MP4 out of the workshop, and which to pick.
+---
+
+Two buttons in the header export your animation: GIF and MP4. Both run entirely
+in your browser, so nothing is uploaded and nothing is queued behind anyone
+else's job.
+
+## GIF or MP4
+
+| | GIF | MP4 |
+| --- | --- | --- |
+| Loops on its own | Yes | Depends on the player |
+| Colours | 256 | Full |
+| File size | Large | Small |
+| Plays in a chat window | Yes | Usually |
+
+Pick **GIF** for a short loop you want to paste somewhere and have it just play.
+Line art on white is exactly what GIF's limited palette handles well, so the
+usual objection to it does not really apply to this kind of work.
+
+Pick **MP4** for anything long, anything with a lot of colour or shading, or
+anything headed for a video timeline. A GIF of a long animation gets very large
+very quickly.
+
+## How it works
+
+Every frame is redrawn from scratch at your canvas's full resolution, composited
+onto a white background, and then encoded. The export does not use the
+thumbnails or anything you see on screen, so zoom level and onion skin settings
+have no effect on the result.
+
+Progress runs through two stages. Rendering redraws the frames, then encoding
+packs them into a file. The button shows a percentage across both.
+
+The frame rate of the export is whatever the timeline is set to.
+
+<Callout>
+  Exports run on your machine, so a long animation at A3 will take a while and
+  will make a laptop fan audible. This is the trade for it being free, private,
+  and not sitting in a queue.
+</Callout>
+
+## Transparency
+
+Exports are flattened onto white. The canvas itself is transparent while you
+draw, which is what lets onion skins show through, but both formats get a solid
+white background on the way out.
+
+## Resolution
+
+The export resolution is the canvas size you chose in the header. See
+[canvas sizes](/docs/canvas#canvas-size) for the full list. If you need a
+different resolution, set it before you draw rather than after, because changing
+the canvas size does not move the strokes already on it.

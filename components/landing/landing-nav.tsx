@@ -29,25 +29,25 @@ const PRODUCT: FeatureLink[] = [
   {
     title: "Canvas & brushes",
     description: "Low-latency freehand drawing.",
-    href: "/docs",
+    href: "/docs/canvas",
     icon: PaintBoardIcon,
   },
   {
     title: "Onion skinning",
     description: "Trace motion between frames.",
-    href: "/docs",
+    href: "/docs/onion-skinning",
     icon: GhostIcon,
   },
   {
     title: "Timeline",
     description: "Reorder and duplicate frames.",
-    href: "/docs",
+    href: "/docs/timeline",
     icon: PlayListIcon,
   },
   {
     title: "Export",
     description: "Looping GIF and MP4 output.",
-    href: "/docs",
+    href: "/docs/exporting",
     icon: Film01Icon,
   },
 ]

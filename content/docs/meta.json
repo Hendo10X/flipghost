@@ -1,0 +1,12 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "canvas",
+    "timeline",
+    "onion-skinning",
+    "exporting",
+    "saving",
+    "shortcuts"
+  ]
+}

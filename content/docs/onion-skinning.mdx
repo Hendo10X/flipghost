@@ -1,0 +1,75 @@
+---
+title: Onion skinning
+description: The ghosts of neighbouring frames, what the colours mean, and how to tune them.
+---
+
+Onion skinning shows the frames around the one you are drawing, faintly, in
+colour, underneath your work. It is named after the translucent paper animators
+used to stack on a lightbox, and it is the single most useful thing in the
+workshop.
+
+Without it you are drawing frame 5 from memory. With it you can see exactly
+where frame 4 left off and put frame 5 the right distance away.
+
+## Turning it on
+
+The onion skin button sits in the timeline. <kbd>O</kbd> toggles it. It is on
+by default, and it is hidden automatically during playback.
+
+## What the colours mean
+
+| Colour | Meaning |
+| --- | --- |
+| Red | Frames before the current one. Where the motion came from. |
+| Green | Frames after the current one. Where it is going. |
+
+Colour is what makes a stack of ghosts readable. Without it you cannot tell
+whether the shape behind your drawing is the past or the future, and that is
+the only thing you actually need to know.
+
+## Settings
+
+The chevron next to the onion skin button opens its settings.
+
+### Before and after
+
+How many frames to ghost on each side, from 0 to 3. They are set separately,
+which matters more than it sounds.
+
+Most of the time you want 1 before and 0 after. You are drawing forward, and
+the frame you just made is the only reference you need. Reach for more when:
+
+- **2 or 3 before** for checking the arc of a movement across several frames,
+  rather than just the last step.
+- **1 after** when you are drawing an in-between, filling a gap between two
+  drawings that already exist.
+- **0 on both** when the drawing gets busy and the ghosts turn into noise. This
+  is a real setting and you should use it.
+
+### Opacity
+
+How strongly the nearest ghost shows, from 5 to 80 percent. The default of 30
+is a reasonable place to sit.
+
+Ghosts further away fade off from there, each one at 55 percent of the
+brightness of the one before it. So with opacity at 30 percent and 3 frames
+ghosted, the nearest sits at 30, the next at about 17, and the furthest at
+about 9. The falloff is what stops three ghosts from reading as one grey smear:
+distance in time looks like distance in contrast.
+
+## Using it well
+
+The habit beginners fall into is turning everything up. Three frames each side
+at maximum opacity gives you seven overlapping drawings and no idea which is
+which.
+
+Experienced animators use far less than you would expect, at far lower opacity.
+The ghost is a reference, not a tracing guide. If you can see it clearly enough
+to trace it, you will trace it, and your animation will not move.
+
+Two things worth trying:
+
+- **Turn it off and check.** If the drawing only reads with the ghosts behind
+  it, it does not read.
+- **Turn it up briefly, then back down.** A quick look at three frames of arc
+  is useful. Drawing with three frames of arc up permanently is not.

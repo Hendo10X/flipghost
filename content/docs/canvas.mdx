@@ -1,0 +1,125 @@
+---
+title: The canvas
+description: Tools, brush sizes, pressure, colour, zoom, and picking a canvas size.
+---
+
+The canvas is where the drawing happens. It holds one frame at a time, with the
+ghosts of its neighbours showing through underneath.
+
+## Tools
+
+There are three tools, in the rail down the left edge.
+
+| Tool | Key | What it does |
+| --- | --- | --- |
+| Select | <kbd>V</kbd> | Move, scale, and rotate strokes you have already drawn. |
+| Brush | <kbd>B</kbd> | Draw. |
+| Eraser | <kbd>E</kbd> | Remove strokes. |
+
+### The eraser removes whole strokes
+
+This is the one thing about the workshop that surprises people. The eraser is
+not a rubber that grinds away pixels. It deletes an entire stroke the moment
+you touch it, the way an undo would.
+
+Drag across several strokes to remove all of them in one go. If you want to
+remove only part of a line, the answer is usually to undo back to before you
+drew it, or to draw the line as several shorter strokes in the first place.
+
+<Callout>
+  This is a deliberate trade. Strokes stay as strokes rather than being flattened
+  into pixels, which is what lets you move them later with the select tool, keeps
+  file sizes small, and keeps every frame crisp at any zoom or export size.
+</Callout>
+
+### Select
+
+With the select tool active, click a stroke to pick it up. Drag to move it, or
+use the handles to scale and rotate. <kbd>Del</kbd> removes what you have
+selected, and <kbd>Esc</kbd> deselects.
+
+Strokes are only selectable while the select tool is active, so you cannot
+knock a line out of place while drawing.
+
+## Brush size
+
+Four sizes are available: 4, 8, 16, and 32. These are measured in canvas units,
+not screen pixels, which means a size 8 brush lays down the same line whether
+you are zoomed out to fit the page or zoomed right in on a detail.
+
+The brush cursor is a ring showing the exact size of the stroke you are about
+to make, scaled to your current zoom.
+
+## Pressure
+
+If you draw with a stylus, Flipghost reads its pressure and varies the width of
+the line accordingly. Press harder for a thicker stroke, ease off for a
+thinner one. This is what a tablet and a pen buy you over a mouse.
+
+With a mouse or a fingertip there is no pressure to read, so the width is
+inferred from how fast you are drawing instead. Quick strokes taper, slow ones
+stay full width. The result is closer to a real line than a uniform one, but a
+pen is still better.
+
+Strokes are also smoothed as you draw, which takes the jitter out of a line
+without flattening the shape you intended.
+
+## Colour
+
+The swatch below the tools opens a colour picker. Pick visually, or type a hex
+value directly. The default is a near black rather than a pure one, because
+pure black tends to look harsh against white paper.
+
+## Zoom
+
+| Action | Shortcut |
+| --- | --- |
+| Zoom in | <kbd>Ctrl</kbd> <kbd>+</kbd> |
+| Zoom out | <kbd>Ctrl</kbd> <kbd>-</kbd> |
+| Fit to viewport | <kbd>Ctrl</kbd> <kbd>0</kbd> |
+
+You can also hold <kbd>Ctrl</kbd> and scroll. The controls sit in the bottom
+right of the canvas, and the percentage between them is a button: click it to
+fit the canvas back into view.
+
+Zoom ranges from a quarter of the fitted size up to eight times it. The
+percentage shown is the real scale between canvas pixels and screen pixels, so
+on a large canvas fitted to a small window it will read well under 100 percent.
+
+## Canvas size
+
+The size selector sits in the header. Seven presets are available:
+
+| Preset | Size |
+| --- | --- |
+| Square | 1080 × 1080 |
+| Landscape | 1920 × 1080 |
+| Portrait | 1080 × 1920 |
+| A4 Portrait | 1240 × 1754 |
+| A4 Landscape | 1754 × 1240 |
+| A3 Portrait | 1754 × 2480 |
+| A3 Landscape | 2480 × 1754 |
+
+The size you pick is the resolution you export at, so choose it for where the
+loop is going. Square for a feed, landscape for video, portrait for a phone
+screen.
+
+<Callout>
+  Pick the size before you draw much. Changing it later does not rescale or
+  reposition the strokes you have already made, so a drawing that was centred
+  in a square will sit off to one side in a landscape.
+</Callout>
+
+## Undo
+
+<kbd>Ctrl</kbd> <kbd>Z</kbd> undoes, and <kbd>Ctrl</kbd> <kbd>Shift</kbd>
+<kbd>Z</kbd> redoes. History runs up to 50 steps.
+
+History is kept per frame. Undo on frame 4 only ever affects frame 4, so
+stepping back to fix something on an earlier frame will not unpick the work you
+did after it.
+
+<Callout type="warn">
+  Undo covers strokes, not frames. Adding, duplicating, deleting, and reordering
+  frames are not currently undoable, so a deleted frame is gone for good.
+</Callout>

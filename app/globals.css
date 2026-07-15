@@ -2,6 +2,13 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Fumadocs powers /docs. The shadcn theme maps its --color-fd-* tokens onto
+   the variables already defined below, so the docs inherit this palette
+   rather than introducing a second one. */
+@import "fumadocs-ui/css/shadcn.css";
+@import "fumadocs-ui/css/preset.css";
+@source "../node_modules/fumadocs-ui/dist/**/*.js";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
