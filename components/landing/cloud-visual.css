@@ -1,0 +1,86 @@
+@layer components {
+  /* Vertical travel. Per-keyframe easing gives it gravity: it decelerates on
+     the way up and accelerates on the way down. */
+  .fg-ball-lift {
+    animation: fg-ball-lift 1.6s infinite;
+  }
+
+  @keyframes fg-ball-lift {
+    0% {
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    50% {
+      transform: translateY(-56px);
+      animation-timing-function: cubic-bezier(0.64, 0, 0.78, 0);
+    }
+    100% {
+      transform: translateY(0);
+    }
+  }
+
+  /* Squash lives on its own element so it can scale from the contact point
+     without fighting the translate above it. */
+  .fg-ball-squash {
+    animation: fg-ball-squash 1.6s infinite;
+  }
+
+  @keyframes fg-ball-squash {
+    0%,
+    100% {
+      transform: scale(1.28, 0.72);
+    }
+    14%,
+    86% {
+      transform: scale(1, 1);
+    }
+  }
+
+  /* The saved chip cross-fades with the saving chip on one shared cycle. */
+  .fg-status-saving {
+    animation: fg-status-saving 6s infinite;
+  }
+
+  .fg-status-saved {
+    animation: fg-status-saved 6s infinite;
+  }
+
+  @keyframes fg-status-saving {
+    0%,
+    22% {
+      opacity: 1;
+    }
+    30%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fg-status-saved {
+    0%,
+    22% {
+      opacity: 0;
+    }
+    30%,
+    100% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fg-ball-lift,
+    .fg-ball-squash,
+    .fg-status-saving {
+      animation: none;
+    }
+
+    .fg-status-saving {
+      opacity: 0;
+    }
+
+    .fg-status-saved {
+      animation: none;
+      opacity: 1;
+    }
+  }
+}

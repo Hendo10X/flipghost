@@ -43,16 +43,18 @@ function SelectContent({
 }: SelectPrimitive.Popup.Props) {
   return (
     <SelectPrimitive.Portal>
+      {/* z-index belongs on the Positioner; the Popup is position:static. */}
       <SelectPrimitive.Positioner
         side="bottom"
         align="start"
         sideOffset={4}
         alignItemWithTrigger={false}
+        className="z-50"
       >
         <SelectPrimitive.Popup
           data-slot="select-content"
           className={cn(
-            "z-50 min-w-(--anchor-width) rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none",
+            "min-w-(--anchor-width) rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none",
             "[transform-origin:var(--transform-origin)] transition-[transform,opacity] duration-150 ease-out",
             "data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0",
             "data-[ending-style]:opacity-0 data-[ending-style]:duration-100",

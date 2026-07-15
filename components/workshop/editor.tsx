@@ -12,8 +12,10 @@ import {
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
 import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
+import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
+import { DesktopOnlyNotice } from "@/components/workshop/desktop-only-notice"
 import { WorkshopHeader } from "@/components/workshop/header"
 import { Timeline } from "@/components/workshop/timeline"
 import { Toolbar } from "@/components/workshop/toolbar"
@@ -178,30 +180,46 @@ export function Editor({
         return
       }
 
-      switch (key) {
-        case " ":
-          e.preventDefault()
-          s.setPlaying(!s.playing)
-          break
-        case "v":
-          s.setTool("select")
-          break
-        case "b":
-          s.setTool("brush")
-          break
-        case "e":
-          s.setTool("eraser")
-          break
-        case "arrowleft":
-        case "arrowright": {
-          const index = s.frames.findIndex((f) => f.id === s.currentId)
-          const next = key === "arrowleft" ? index - 1 : index + 1
-          if (next >= 0 && next < s.frames.length) {
-            s.selectFrame(s.frames[next].id)
-          }
-          break
+      const keys = getHotkeysSnapshot()
+      const step = (delta: number) => {
+        const index = s.frames.findIndex((f) => f.id === s.currentId)
+        const next = index + delta
+        if (next >= 0 && next < s.frames.length) {
+          s.selectFrame(s.frames[next].id)
         }
       }
+
+      let handled = true
+      switch (key) {
+        case keys.playPause:
+          s.setPlaying(!s.playing)
+          break
+        case keys.select:
+          s.setTool("select")
+          break
+        case keys.brush:
+          s.setTool("brush")
+          break
+        case keys.eraser:
+          s.setTool("eraser")
+          break
+        case keys.toggleOnion:
+          s.toggleOnionSkin()
+          break
+        case keys.addFrame:
+          s.addFrame()
+          break
+        case keys.prevFrame:
+          step(-1)
+          break
+        case keys.nextFrame:
+          step(1)
+          break
+        default:
+          handled = false
+      }
+      // Space and the arrows would otherwise scroll the canvas viewport.
+      if (handled) e.preventDefault()
     }
 
     window.addEventListener("keydown", onKeyDown)
@@ -210,7 +228,8 @@ export function Editor({
 
   return (
     <TooltipProvider>
-      <div className="flex h-dvh flex-col">
+      <DesktopOnlyNotice />
+      <div className="hidden h-dvh flex-col md:flex">
         <WorkshopHeader />
         <div className="flex min-h-0 flex-1">
           <Toolbar />

@@ -1,0 +1,22 @@
+/* The drift applied to each ghost inside a frame cell. Kept on its own
+   element so it composes with the pose transform on the parent wrapper
+   rather than overwriting it. */
+@keyframes lost-frame-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8%);
+  }
+}
+
+.lost-frame-ghost {
+  animation: lost-frame-drift 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lost-frame-ghost {
+    animation: none;
+  }
+}
