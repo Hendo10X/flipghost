@@ -1,12 +1,13 @@
 import Link from "next/link"
 import {
-  CloudUploadIcon,
   ArrowRight01Icon,
+  CloudSavingDone01Icon,
   Copy01Icon,
   Cursor01Icon,
   Delete02Icon,
   EraserIcon,
   GhostIcon,
+  Loading03Icon,
   PencilEdit02Icon,
   PlusSignIcon,
 } from "@hugeicons/core-free-icons"
@@ -18,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ExportProgress } from "@/components/landing/export-progress"
 import { Panel, Section } from "@/components/landing/section"
+import "./cloud-visual.css"
 
 /** Two-column feature layout; the visual can lead on wide screens. */
 function Split({
@@ -289,24 +291,6 @@ export function CanvasSection() {
   )
 }
 
-/** The same ball, drawn once and picked up on whatever screen is next. */
-function DeviceBall({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 60 40" className={cn("text-black/15", className)}>
-      <line
-        x1="12"
-        y1="31"
-        x2="48"
-        y2="31"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <circle cx="30" cy="24" r="6" className="fill-sky-500" />
-    </svg>
-  )
-}
-
 /** Section 7 — cloud projects. */
 export function CloudSection() {
   return (
@@ -322,40 +306,58 @@ export function CloudSection() {
             "Import a reference image to trace",
           ]}
         />
-        <Panel className="relative flex min-h-56 items-center justify-center bg-muted/30">
-          {/* Laptop */}
-          <div className="w-full max-w-[15rem] overflow-hidden rounded-lg border bg-background shadow-sm">
-            <div className="flex h-5 items-center gap-1 border-b px-2">
+        <Panel className="flex min-h-64 items-center justify-center bg-muted/30">
+          <div className="w-full max-w-[17rem] overflow-hidden rounded-xl border bg-background shadow-md">
+            <div className="flex h-8 items-center gap-1.5 border-b px-3">
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
                   className="size-1.5 rounded-full bg-muted-foreground/25"
                 />
               ))}
-              <span className="ml-1 truncate text-[8px] text-muted-foreground">
+              <span className="ml-1 truncate text-[10px] text-muted-foreground">
                 Bouncing ball
               </span>
+              {/* Both chips occupy the same slot and cross-fade on one cycle. */}
+              <span className="relative ml-auto flex h-4 w-20 items-center justify-end">
+                <span className="fg-status-saving absolute right-0 flex items-center gap-1 text-[10px] whitespace-nowrap text-muted-foreground">
+                  <HugeiconsIcon
+                    icon={Loading03Icon}
+                    className="size-2.5 animate-spin"
+                    strokeWidth={2.5}
+                  />
+                  Saving…
+                </span>
+                <span className="fg-status-saved absolute right-0 flex items-center gap-1 text-[10px] whitespace-nowrap text-sky-600 dark:text-sky-400">
+                  <HugeiconsIcon
+                    icon={CloudSavingDone01Icon}
+                    className="size-2.5"
+                    strokeWidth={2.5}
+                  />
+                  Saved
+                </span>
+              </span>
             </div>
-            <div className="flex aspect-video items-center justify-center bg-white">
-              <DeviceBall className="h-3/4 w-auto" />
+
+            <div className="relative h-40 bg-white">
+              <span className="absolute bottom-10 left-1/2 h-0.5 w-3/5 -translate-x-1/2 rounded-full bg-black/10" />
+              {/* Three layers: position, travel, squash — so no transform fights another. */}
+              <span className="absolute bottom-10 left-1/2 -translate-x-1/2">
+                <span className="fg-ball-lift block">
+                  <span className="fg-ball-squash block size-10 origin-bottom rounded-full bg-sky-500" />
+                </span>
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between border-t px-3 py-2">
+              <span className="text-[10px] text-muted-foreground">
+                Edited just now
+              </span>
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                12 frames
+              </span>
             </div>
           </div>
-
-          {/* Phone, holding the same project */}
-          <div className="absolute right-5 bottom-5 w-16 overflow-hidden rounded-lg border-2 border-background bg-background shadow-lg ring-1 ring-border">
-            <div className="flex aspect-[9/16] items-center justify-center bg-white">
-              <DeviceBall className="w-full" />
-            </div>
-          </div>
-
-          <span className="absolute top-4 left-4 flex items-center gap-1.5 rounded-full border bg-background px-2 py-1 text-[10px] font-medium shadow-sm">
-            <HugeiconsIcon
-              icon={CloudUploadIcon}
-              className="size-3 text-sky-500"
-              strokeWidth={2}
-            />
-            All changes saved
-          </span>
         </Panel>
       </Split>
     </section>
