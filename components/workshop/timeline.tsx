@@ -107,7 +107,7 @@ function OnionSettings() {
                     aria-checked={row.value === count}
                     onClick={() => row.onChange(count)}
                     className={cn(
-                      "flex-1 rounded-[5px] py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:py-2",
+                      "flex-1 rounded-[5px] py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:py-2 max-lg:py-2",
                       row.value === count
                         ? "bg-background text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
@@ -179,7 +179,7 @@ export function Timeline() {
     <div className="flex flex-col gap-2 border-t px-4 py-3">
       {/* Height and a floor on width, rather than a square: the onion skin
           toggle carries a label and must stay its natural width. */}
-      <div className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11">
+      <div className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11 max-lg:[&_[data-slot=button]]:h-11 max-lg:[&_[data-slot=button]]:min-w-11">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -220,7 +220,7 @@ export function Timeline() {
               aria-checked={fps === option}
               onClick={() => setFps(option)}
               className={cn(
-                "rounded-[5px] px-2 py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:px-3 pointer-coarse:py-2",
+                "rounded-[5px] px-2 py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:px-3 pointer-coarse:py-2 max-lg:px-3 max-lg:py-2",
                 fps === option
                   ? "bg-background text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"

@@ -420,7 +420,9 @@ export function CanvasStage() {
   }, [playing, fps])
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    // min-w-0: without it a flex child refuses to shrink below its content,
+    // which would push the stage out past the viewport instead of fitting it.
+    <div className="relative flex min-h-0 min-w-0 flex-1">
       <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
         {/* Sized to the stage (w-max/h-max) but never smaller than the
             viewport, so centring applies only when there is room to spare.

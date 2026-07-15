@@ -229,9 +229,11 @@ export function Editor({
   return (
     <TooltipProvider>
       <SmallScreenNotice />
-      <div className="hidden h-dvh flex-col md:flex">
+      {/* overflow-hidden so the only thing that ever scrolls sideways is the
+          frame strip in the timeline. Everything above it has to fit. */}
+      <div className="hidden h-dvh flex-col overflow-hidden md:flex">
         <WorkshopHeader />
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1">
           <Toolbar />
           <CanvasStage />
         </div>

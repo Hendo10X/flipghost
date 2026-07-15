@@ -129,7 +129,9 @@ export function WorkshopHeader() {
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4">
+    // Taller on tablet so its controls can hit a 44px target without being
+    // squeezed against the border.
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b px-4 pointer-coarse:h-14 max-lg:h-14 max-lg:gap-2">
       <Link
         href={session ? "/projects" : "/"}
         aria-label={session ? "My animations" : "Flipghost home"}
@@ -145,7 +147,7 @@ export function WorkshopHeader() {
         onChange={(e) => setTitle(e.target.value)}
         aria-label="Animation title"
         spellCheck={false}
-        className="h-7 w-48 truncate rounded-md bg-transparent px-2 text-sm font-medium outline-none placeholder:text-muted-foreground hover:bg-muted focus-visible:bg-muted"
+        className="h-7 w-28 min-w-0 shrink truncate rounded-md bg-transparent px-2 text-sm font-medium outline-none placeholder:text-muted-foreground hover:bg-muted focus-visible:bg-muted lg:w-48"
         placeholder="Untitled Animation"
       />
 
@@ -156,7 +158,10 @@ export function WorkshopHeader() {
           STAGE_PRESETS.map((p) => [p.id, `${p.label} · ${p.width}×${p.height}`])
         )}
       >
-        <SelectTrigger aria-label="Canvas size">
+        <SelectTrigger
+          aria-label="Canvas size"
+          className="min-w-0 overflow-hidden max-lg:max-w-40 [&>span:first-child]:truncate"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -168,16 +173,21 @@ export function WorkshopHeader() {
         </SelectContent>
       </Select>
 
-      <div className="ml-auto flex items-center gap-2">
+      {/* Does not shrink: the title and the size select give way instead, so
+          these stay reachable rather than being clipped by the root. */}
+      <div className="ml-auto flex shrink-0 items-center gap-2 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11 max-lg:[&_[data-slot=button]]:h-11 max-lg:[&_[data-slot=button]]:min-w-11">
         {exportError && (
           <span role="alert" className="text-xs text-destructive">
             {exportError}
           </span>
         )}
 
-        <HotkeysMenu />
+        {/* A shortcut sheet is no use without a keyboard. */}
+        <div className="hidden lg:block">
+          <HotkeysMenu />
+        </div>
 
-        <div className="h-4 w-px bg-border" />
+        <div className="h-4 w-px bg-border max-lg:hidden" />
 
         {session && (
           <Tooltip>
@@ -204,13 +214,15 @@ export function WorkshopHeader() {
                   ) : (
                     <HugeiconsIcon icon={CloudUploadIcon} strokeWidth={1.8} />
                   )}
-                  {cloudStatus === "saving"
-                    ? "Saving"
-                    : cloudStatus === "saved" && projectId
-                      ? "Saved"
-                      : cloudStatus === "error"
-                        ? "Retry save"
-                        : "Save"}
+                  <span className="hidden lg:inline">
+                    {cloudStatus === "saving"
+                      ? "Saving"
+                      : cloudStatus === "saved" && projectId
+                        ? "Saved"
+                        : cloudStatus === "error"
+                          ? "Retry save"
+                          : "Save"}
+                  </span>
                 </Button>
               }
             />
@@ -241,7 +253,7 @@ export function WorkshopHeader() {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <HugeiconsIcon icon={ImageAdd01Icon} strokeWidth={1.8} />
-                    Import
+                    <span className="hidden lg:inline">Import</span>
                   </Button>
                 }
               />
@@ -298,7 +310,7 @@ export function WorkshopHeader() {
                 ) : (
                   <>
                     <HugeiconsIcon icon={Gif01Icon} strokeWidth={1.8} />
-                    GIF
+                    <span className="hidden lg:inline">GIF</span>
                   </>
                 )}
               </Button>
@@ -330,7 +342,7 @@ export function WorkshopHeader() {
                 ) : (
                   <>
                     <HugeiconsIcon icon={Film01Icon} strokeWidth={1.8} />
-                    MP4
+                    <span className="hidden lg:inline">MP4</span>
                   </>
                 )}
               </Button>
