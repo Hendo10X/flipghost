@@ -41,3 +41,7 @@ next-env.d.ts
 
 # fumadocs generated content map
 /.source
+
+# Blog drafts staged for pasting into Marble. The CMS is the source of
+# truth for published content, so these are scratch copies, not history.
+drafts/
