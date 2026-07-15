@@ -9,26 +9,26 @@ const COLUMNS: { heading: string; links: { label: string; href: string }[] }[] =
     links: [
       { label: "Workshop", href: "/workshop" },
       { label: "Showcase", href: "/showcase" },
-      { label: "Pricing", href: "#" },
-      { label: "Changelog", href: "#" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Changelog", href: "/changelog" },
     ],
   },
   {
     heading: "Learn",
     links: [
-      { label: "Documentation", href: "#" },
-      { label: "Tutorials", href: "#" },
-      { label: "Onion skinning", href: "#" },
-      { label: "Keyboard shortcuts", href: "#" },
+      { label: "Documentation", href: "/docs" },
+      { label: "Tutorials", href: "/tutorials" },
+      { label: "Onion skinning", href: "/docs" },
+      { label: "Keyboard shortcuts", href: "/docs" },
     ],
   },
   {
     heading: "Company",
     links: [
-      { label: "About", href: "#" },
-      { label: "Blog", href: "#" },
-      { label: "Community", href: "#" },
-      { label: "Contact", href: "#" },
+      { label: "About", href: "/about" },
+      { label: "Blog", href: "/blog" },
+      { label: "Community", href: "/community" },
+      { label: "Contact", href: "/contact" },
     ],
   },
 ]
@@ -86,13 +86,16 @@ export function SiteFooter() {
             © 2026 Flipghost. Built for people who draw.
           </span>
           <div className="flex items-center gap-4">
-            {["Privacy", "Terms"].map((label) => (
+            {[
+              { label: "Privacy", href: "/privacy" },
+              { label: "Terms", href: "/terms" },
+            ].map((link) => (
               <Link
-                key={label}
-                href="#"
+                key={link.label}
+                href={link.href}
                 className="text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
-                {label}
+                {link.label}
               </Link>
             ))}
           </div>

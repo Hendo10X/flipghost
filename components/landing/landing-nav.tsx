@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils"
 interface FeatureLink {
   title: string
   description: string
+  href: string
   icon: typeof GhostIcon
 }
 
@@ -28,26 +29,35 @@ const PRODUCT: FeatureLink[] = [
   {
     title: "Canvas & brushes",
     description: "Low-latency freehand drawing.",
+    href: "/docs",
     icon: PaintBoardIcon,
   },
   {
     title: "Onion skinning",
     description: "Trace motion between frames.",
+    href: "/docs",
     icon: GhostIcon,
   },
   {
     title: "Timeline",
     description: "Reorder and duplicate frames.",
+    href: "/docs",
     icon: PlayListIcon,
   },
   {
     title: "Export",
     description: "Looping GIF and MP4 output.",
+    href: "/docs",
     icon: Film01Icon,
   },
 ]
 
-const RESOURCES = ["Documentation", "Tutorials", "Changelog", "Community"]
+const RESOURCES: { label: string; href: string }[] = [
+  { label: "Documentation", href: "/docs" },
+  { label: "Tutorials", href: "/tutorials" },
+  { label: "Changelog", href: "/changelog" },
+  { label: "Community", href: "/community" },
+]
 
 const triggerClass =
   "group flex items-center gap-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors outline-none select-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30 data-[popup-open]:text-foreground"
@@ -75,7 +85,7 @@ export function LandingNav() {
                 {PRODUCT.map((item) => (
                   <li key={item.title}>
                     <NavigationMenu.Link
-                      href="#"
+                      render={<Link href={item.href} />}
                       className="flex items-start gap-3 rounded-lg p-2.5 transition-colors outline-none hover:bg-muted focus-visible:bg-muted"
                     >
                       <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-card text-foreground">
@@ -110,12 +120,12 @@ export function LandingNav() {
             <NavigationMenu.Content className="w-56 p-2">
               <ul className="flex flex-col gap-0.5">
                 {RESOURCES.map((item) => (
-                  <li key={item}>
+                  <li key={item.label}>
                     <NavigationMenu.Link
-                      href="#"
+                      render={<Link href={item.href} />}
                       className="block rounded-md px-2.5 py-2 text-sm transition-colors outline-none hover:bg-muted focus-visible:bg-muted"
                     >
-                      {item}
+                      {item.label}
                     </NavigationMenu.Link>
                   </li>
                 ))}
@@ -125,7 +135,7 @@ export function LandingNav() {
 
           <NavigationMenu.Item>
             <NavigationMenu.Link
-              href="#"
+              render={<Link href="/pricing" />}
               className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
             >
               Pricing
@@ -236,9 +246,9 @@ function MobileMenu() {
             Product
           </p>
           {PRODUCT.map((item) => (
-            <a
+            <Link
               key={item.title}
-              href="#"
+              href={item.href}
               className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
             >
               <HugeiconsIcon
@@ -247,28 +257,28 @@ function MobileMenu() {
                 strokeWidth={1.8}
               />
               {item.title}
-            </a>
+            </Link>
           ))}
 
           <p className="px-2 pt-3 pb-1 text-[11px] font-medium text-muted-foreground">
             Resources
           </p>
           {RESOURCES.map((item) => (
-            <a
-              key={item}
-              href="#"
+            <Link
+              key={item.label}
+              href={item.href}
               className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
             >
-              {item}
-            </a>
+              {item.label}
+            </Link>
           ))}
 
-          <a
-            href="#"
+          <Link
+            href="/pricing"
             className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
           >
             Pricing
-          </a>
+          </Link>
           <Link
             href="/showcase"
             className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
