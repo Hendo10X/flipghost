@@ -1,6 +1,4 @@
 import Link from "next/link"
-import { ComputerIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Button } from "@/components/ui/button"
 import { Wordmark } from "@/components/wordmark"
@@ -15,14 +13,6 @@ export function DesktopOnlyNotice() {
       <Link href="/">
         <Wordmark />
       </Link>
-
-      <div className="flex size-12 items-center justify-center rounded-xl border bg-card shadow-sm">
-        <HugeiconsIcon
-          icon={ComputerIcon}
-          className="size-5 text-muted-foreground"
-          strokeWidth={1.5}
-        />
-      </div>
 
       <div className="flex flex-col gap-2">
         <h1 className="font-display text-2xl leading-tight font-normal tracking-tight text-balance">
