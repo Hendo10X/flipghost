@@ -53,7 +53,8 @@ export function Editor({
           stagePresetId: initialProject.stagePresetId,
           frames: initialProject.frames,
           currentId: initialProject.frames[0].id,
-          histories: {},
+          past: [],
+          future: [],
           revision: s.revision + 1,
         }))
       } else if (initialDemoId && getDemo(initialDemoId)) {
@@ -70,7 +71,8 @@ export function Editor({
           stagePresetId: spec.stagePresetId,
           frames: demoFrames,
           currentId: demoFrames[0].id,
-          histories: {},
+          past: [],
+          future: [],
           revision: s.revision + 1,
         }))
       } else if (initialNew) {
@@ -85,7 +87,8 @@ export function Editor({
           stagePresetId: getStagePreset(initialNew.stagePresetId).id,
           frames: [frame],
           currentId: frame.id,
-          histories: {},
+          past: [],
+          future: [],
           revision: s.revision + 1,
         }))
       } else {
@@ -94,7 +97,8 @@ export function Editor({
         if (snapshot && useFlipbook.getState().projectId === null) {
           useFlipbook.setState((s) => ({
             ...snapshot,
-            histories: {},
+            past: [],
+          future: [],
             revision: s.revision + 1,
           }))
         }

@@ -115,11 +115,15 @@ screen.
 <kbd>Ctrl</kbd> <kbd>Z</kbd> undoes, and <kbd>Ctrl</kbd> <kbd>Shift</kbd>
 <kbd>Z</kbd> redoes. History runs up to 50 steps.
 
-History is kept per frame. Undo on frame 4 only ever affects frame 4, so
-stepping back to fix something on an earlier frame will not unpick the work you
-did after it.
+Undo covers everything you do to the animation, not just drawing. Strokes, a
+cleared frame, and frames added, duplicated, reordered, or deleted all step
+back the same way.
 
-<Callout type="warn">
-  Undo covers strokes, not frames. Adding, duplicating, deleting, and reordering
-  frames are not currently undoable, so a deleted frame is gone for good.
+If the edit you are undoing happened on another frame, undo takes you to that
+frame first, so you always see what changed rather than having a drawing
+altered out of view.
+
+<Callout>
+  Undo does not cover the title, frame rate, or canvas size. Those are settings
+  rather than edits, and you can simply set them back.
 </Callout>

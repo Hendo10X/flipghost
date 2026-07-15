@@ -55,9 +55,17 @@ export interface Frame {
   dataUrl: string | null
 }
 
-interface FrameHistory {
-  past: (FrameJSON | null)[]
-  future: (FrameJSON | null)[]
+/**
+ * One undoable step: the whole frame list plus which frame was open.
+ *
+ * Holding the entire list sounds expensive but is close to free. Every
+ * mutation below rebuilds the array while reusing the frame objects it did
+ * not touch, so a step costs one array of pointers. Nothing is cloned, and
+ * the snapshots share their unchanged frames with the live state.
+ */
+interface HistoryEntry {
+  frames: Frame[]
+  currentId: string
 }
 
 const HISTORY_LIMIT = 50
@@ -66,11 +74,23 @@ function blankFrame(): Frame {
   return { id: crypto.randomUUID(), json: null, dataUrl: null }
 }
 
-function historyFor(
-  histories: Record<string, FrameHistory>,
-  id: string
-): FrameHistory {
-  return histories[id] ?? { past: [], future: [] }
+function entryOf(state: { frames: Frame[]; currentId: string }): HistoryEntry {
+  return { frames: state.frames, currentId: state.currentId }
+}
+
+/**
+ * Wraps a change so it can be undone, recording where we were before it.
+ * Any new edit drops the redo stack, which is the usual branching rule.
+ */
+function recording(
+  state: { frames: Frame[]; currentId: string; past: HistoryEntry[] },
+  next: { frames: Frame[]; currentId?: string }
+) {
+  return {
+    ...next,
+    past: [...state.past, entryOf(state)].slice(-HISTORY_LIMIT),
+    future: [],
+  }
 }
 
 interface FlipbookState {
@@ -101,7 +121,9 @@ interface FlipbookState {
   /** Cloud project id once saved; null means local scratch work. */
   projectId: string | null
   cloudStatus: "idle" | "saving" | "saved" | "error"
-  histories: Record<string, FrameHistory>
+  /** Undo/redo stacks over the frame list. See {@link HistoryEntry}. */
+  past: HistoryEntry[]
+  future: HistoryEntry[]
 
   setProjectId: (id: string | null) => void
   setCloudStatus: (status: "idle" | "saving" | "saved" | "error") => void
@@ -156,7 +178,8 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   pendingImport: null,
   projectId: null,
   cloudStatus: "idle",
-  histories: {},
+  past: [],
+  future: [],
 
   setProjectId: (projectId) => set({ projectId }),
   setCloudStatus: (cloudStatus) => set({ cloudStatus }),
@@ -189,7 +212,7 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       const frame = blankFrame()
       const frames = [...s.frames]
       frames.splice(index + 1, 0, frame)
-      return { frames, currentId: frame.id }
+      return recording(s, { frames, currentId: frame.id })
     }),
 
   duplicateFrame: () =>
@@ -203,22 +226,21 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       }
       const frames = [...s.frames]
       frames.splice(index + 1, 0, copy)
-      return { frames, currentId: copy.id }
+      return recording(s, { frames, currentId: copy.id })
     }),
 
   deleteFrame: () =>
     set((s) => {
       const index = s.frames.findIndex((f) => f.id === s.currentId)
-      const histories = { ...s.histories }
-      delete histories[s.currentId]
 
+      // Deleting the only frame leaves a blank one rather than no canvas.
       if (s.frames.length === 1) {
         const frame = blankFrame()
-        return { frames: [frame], currentId: frame.id, histories }
+        return recording(s, { frames: [frame], currentId: frame.id })
       }
       const frames = s.frames.filter((f) => f.id !== s.currentId)
       const next = frames[Math.min(index, frames.length - 1)]
-      return { frames, currentId: next.id, histories }
+      return recording(s, { frames, currentId: next.id })
     }),
 
   reorderFrames: (fromIndex, toIndex) =>
@@ -235,19 +257,16 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       const frames = [...s.frames]
       const [moved] = frames.splice(fromIndex, 1)
       frames.splice(toIndex, 0, moved)
-      return { frames }
+      return recording(s, { frames })
     }),
 
   commitFrame: (id, json, dataUrl) =>
     set((s) => {
       const frame = s.frames.find((f) => f.id === id)
       if (!frame) return s
-      const history = historyFor(s.histories, id)
-      const past = [...history.past, frame.json].slice(-HISTORY_LIMIT)
-      return {
+      return recording(s, {
         frames: s.frames.map((f) => (f.id === id ? { ...f, json, dataUrl } : f)),
-        histories: { ...s.histories, [id]: { past, future: [] } },
-      }
+      })
     }),
 
   setFrameSnapshot: (id, dataUrl) =>
@@ -259,53 +278,46 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
     set((s) => {
       const frame = s.frames.find((f) => f.id === s.currentId)
       if (!frame || (!frame.json && !frame.dataUrl)) return s
-      const history = historyFor(s.histories, s.currentId)
-      const past = [...history.past, frame.json].slice(-HISTORY_LIMIT)
       return {
-        frames: s.frames.map((f) =>
-          f.id === s.currentId ? { ...f, json: null, dataUrl: null } : f
-        ),
-        histories: { ...s.histories, [s.currentId]: { past, future: [] } },
+        ...recording(s, {
+          frames: s.frames.map((f) =>
+            f.id === s.currentId ? { ...f, json: null, dataUrl: null } : f
+          ),
+        }),
         revision: s.revision + 1,
       }
     }),
 
+  /**
+   * Steps back one edit, whatever it was: a stroke, a cleared frame, or a
+   * frame added, duplicated, reordered, or deleted. Restoring `currentId`
+   * alongside the frames means undo lands you on the frame that changed
+   * rather than silently altering one you cannot see.
+   */
   undo: () =>
     set((s) => {
-      const history = historyFor(s.histories, s.currentId)
-      if (history.past.length === 0) return s
-      const frame = s.frames.find((f) => f.id === s.currentId)
-      if (!frame) return s
-      const past = [...history.past]
-      const previous = past.pop()!
+      if (s.past.length === 0) return s
+      const past = [...s.past]
+      const entry = past.pop()!
       return {
-        frames: s.frames.map((f) =>
-          f.id === s.currentId ? { ...f, json: previous, dataUrl: null } : f
-        ),
-        histories: {
-          ...s.histories,
-          [s.currentId]: { past, future: [...history.future, frame.json] },
-        },
+        frames: entry.frames,
+        currentId: entry.currentId,
+        past,
+        future: [...s.future, entryOf(s)].slice(-HISTORY_LIMIT),
         revision: s.revision + 1,
       }
     }),
 
   redo: () =>
     set((s) => {
-      const history = historyFor(s.histories, s.currentId)
-      if (history.future.length === 0) return s
-      const frame = s.frames.find((f) => f.id === s.currentId)
-      if (!frame) return s
-      const future = [...history.future]
-      const next = future.pop()!
+      if (s.future.length === 0) return s
+      const future = [...s.future]
+      const entry = future.pop()!
       return {
-        frames: s.frames.map((f) =>
-          f.id === s.currentId ? { ...f, json: next, dataUrl: null } : f
-        ),
-        histories: {
-          ...s.histories,
-          [s.currentId]: { past: [...history.past, frame.json], future },
-        },
+        frames: entry.frames,
+        currentId: entry.currentId,
+        past: [...s.past, entryOf(s)].slice(-HISTORY_LIMIT),
+        future,
         revision: s.revision + 1,
       }
     }),

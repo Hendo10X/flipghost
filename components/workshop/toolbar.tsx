@@ -40,12 +40,8 @@ export function Toolbar() {
   const clearFrame = useFlipbook((s) => s.clearFrame)
   const undo = useFlipbook((s) => s.undo)
   const redo = useFlipbook((s) => s.redo)
-  const canUndo = useFlipbook(
-    (s) => (s.histories[s.currentId]?.past.length ?? 0) > 0
-  )
-  const canRedo = useFlipbook(
-    (s) => (s.histories[s.currentId]?.future.length ?? 0) > 0
-  )
+  const canUndo = useFlipbook((s) => s.past.length > 0)
+  const canRedo = useFlipbook((s) => s.future.length > 0)
 
   return (
     // Every control in here is icon-only, so they all grow to a 44px target
