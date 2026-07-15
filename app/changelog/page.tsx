@@ -1,68 +1,91 @@
 import type { Metadata } from "next"
-import {
-  Bug01Icon,
-  Clock01Icon,
-  PackageIcon,
-  Rocket01Icon,
-  SparklesIcon,
-  Tag01Icon,
-} from "@hugeicons/core-free-icons"
 
-import { ComingSoon, type ComingSoonItem } from "@/components/landing/coming-soon"
+import { LandingNav } from "@/components/landing/landing-nav"
+import { SiteFooter } from "@/components/landing/site-footer"
+import { formatPostDate, getPosts, MARBLE_CATEGORY } from "@/lib/marble"
 
 export const metadata: Metadata = {
   title: "Changelog | Flipghost",
   description:
-    "Every change to Flipghost, written down. Features, fixes, and the things we are still getting wrong.",
+    "Every change to the workshop, written down: what moved, and when.",
 }
 
-const ITEMS: ComingSoonItem[] = [
-  {
-    title: "What shipped",
-    description:
-      "New tools, new export formats, new corners of the timeline, each with a loop showing what it actually does.",
-    icon: SparklesIcon,
-  },
-  {
-    title: "What got fixed",
-    description:
-      "The brush lag, the dropped frame, the export that stalled at 98 percent. Named plainly, not as improvements to stability.",
-    icon: Bug01Icon,
-  },
-  {
-    title: "Version tags",
-    description:
-      "Every entry pinned to a version, so you can tell which build you were drawing in when something changed.",
-    icon: Tag01Icon,
-  },
-  {
-    title: "Release notes",
-    description:
-      "The longer write up for releases big enough to need one, including anything that behaves differently now.",
-    icon: PackageIcon,
-  },
-  {
-    title: "What is next",
-    description:
-      "The short list of what we are building now, kept honest and updated when it slips, which it will.",
-    icon: Rocket01Icon,
-  },
-  {
-    title: "Dated, always",
-    description:
-      "Real dates on every entry. A changelog without dates is a marketing page wearing a fake moustache.",
-    icon: Clock01Icon,
-  },
-]
+/**
+ * Unlike the blog and the tutorials, a changelog entry is read where it sits.
+ * Nobody wants to open six pages to find out what shipped last month, so the
+ * entries render in full against a dated rail and there is no [slug] route.
+ */
+export default async function ChangelogPage() {
+  const entries = await getPosts(MARBLE_CATEGORY.changelog, { limit: 50 })
 
-export default function ChangelogPage() {
   return (
-    <ComingSoon
-      title="Every change, written down"
-      description="Flipghost moves fast enough that the workshop you open next month will not be the one you opened today. This is where we will tell you exactly what moved, and when."
-      itemsHeading="What goes in an entry"
-      items={ITEMS}
-      note="The first entries are being written now. Until then, the shortest possible changelog is this: we built a canvas, a timeline, onion skinning, and an exporter, and we are still sanding the edges off all four."
-    />
+    <div className="flex min-h-dvh flex-col">
+      <LandingNav />
+
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 pt-14 pb-20 sm:pt-20">
+        <header className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards flex max-w-xl flex-col gap-2 duration-500 ease-out motion-reduce:animate-none">
+          <span className="text-xs font-medium text-sky-600 dark:text-sky-400">
+            Changelog
+          </span>
+          <h1 className="font-display text-4xl leading-[1.1] font-normal tracking-tight text-balance sm:text-5xl">
+            Every change, written down
+          </h1>
+          <p className="mt-2 max-w-md text-base leading-relaxed text-pretty text-muted-foreground">
+            Flipghost moves fast enough that the workshop you open next month
+            will not be the one you opened today. This is exactly what moved,
+            and when.
+          </p>
+        </header>
+
+        {entries.length === 0 ? (
+          <p className="mt-16 max-w-md text-sm leading-relaxed text-pretty text-muted-foreground">
+            No entries yet. Until then, the shortest possible changelog is this:
+            we built a canvas, a timeline, onion skinning, and an exporter, and
+            we are still sanding the edges off all four.
+          </p>
+        ) : (
+          <ol className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards mt-16 flex flex-col delay-150 duration-500 ease-out motion-reduce:animate-none sm:mt-20">
+            {entries.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex flex-col gap-4 border-l pb-12 pl-6 last:border-l-transparent last:pb-0 sm:gap-6 sm:pl-8"
+              >
+                <div className="flex flex-col gap-1.5">
+                  {/* Sits on the rule itself, so the eye can run the dates. */}
+                  <span
+                    aria-hidden
+                    className="-ml-[1.8125rem] size-2 rounded-full border-2 border-background bg-border sm:-ml-[2.3125rem]"
+                  />
+                  <time
+                    dateTime={entry.publishedAt}
+                    className="text-xs tabular-nums text-muted-foreground"
+                  >
+                    {formatPostDate(entry.publishedAt)}
+                  </time>
+                  <h2 className="font-display text-xl leading-tight font-normal tracking-tight text-balance sm:text-2xl">
+                    {entry.title}
+                  </h2>
+                  {entry.description ? (
+                    <p className="text-sm leading-relaxed text-pretty text-muted-foreground">
+                      {entry.description}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Fumadocs' prose has no size modifier, but it scales off
+                    --tw-prose-size. An entry is a note, not an essay, so it
+                    reads a step down from a blog post. */}
+                <div
+                  className="prose [--tw-prose-size:0.9]"
+                  dangerouslySetInnerHTML={{ __html: entry.content }}
+                />
+              </li>
+            ))}
+          </ol>
+        )}
+      </main>
+
+      <SiteFooter />
+    </div>
   )
 }
