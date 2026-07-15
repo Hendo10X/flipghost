@@ -353,7 +353,17 @@ export function CanvasStage() {
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
-    let cancelled = false
+
+    /**
+     * Stepping frames faster than a frame enlivens starts a second load before
+     * the first has finished, and loadFromJSON does its `clear()` and `add()`
+     * *inside* the promise it returns. So a flag checked after the await is
+     * already too late: the stale artwork is on the canvas by then, and the
+     * next stroke commits it into whichever frame is now selected, merging the
+     * two for good. The signal makes the superseded load reject before it can
+     * touch anything.
+     */
+    const controller = new AbortController()
 
     async function load() {
       if (!canvas) return
@@ -361,8 +371,15 @@ export function CanvasStage() {
       const frame = state.frames.find((f) => f.id === state.currentId)
       canvas.clear()
       if (frame?.json) {
-        await canvas.loadFromJSON(frame.json as object)
-        if (cancelled) return
+        try {
+          await canvas.loadFromJSON(frame.json as object, undefined, {
+            signal: controller.signal,
+          })
+        } catch {
+          // Aborted, or an unreadable frame. Either way a newer load owns the
+          // canvas now and this one must not draw over it.
+          return
+        }
         canvas.forEachObject((obj) => {
           obj.set({
             selectable: state.tool === "select",
@@ -385,7 +402,7 @@ export function CanvasStage() {
 
     load()
     return () => {
-      cancelled = true
+      controller.abort()
     }
   }, [currentId, revision, ready])
 
