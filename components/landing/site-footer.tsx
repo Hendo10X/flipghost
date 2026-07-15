@@ -71,13 +71,13 @@ export function SiteFooter() {
         ))}
       </div>
 
-      {/* Oversized wordmark, cropped by the footer's edge. */}
+      {/* Oversized wordmark, cropped by the footer's edge. Full-bleed and
+          centred on the viewport: inside the max-w-5xl column it would start
+          at the column's edge and overflow to one side. */}
       <div className="overflow-hidden border-t" aria-hidden>
-        <div className="mx-auto max-w-5xl px-6">
-          <span className="block translate-y-[22%] font-display text-[19vw] leading-none tracking-tight whitespace-nowrap text-foreground/[0.07] select-none">
-            Flipghost
-          </span>
-        </div>
+        <span className="block translate-y-[20%] text-center font-display text-[17vw] leading-none tracking-tight whitespace-nowrap text-foreground/[0.07] select-none">
+          Flipghost
+        </span>
       </div>
 
       <div className="border-t">

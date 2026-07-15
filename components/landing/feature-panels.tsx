@@ -1,6 +1,6 @@
 import Link from "next/link"
 import {
-  Album01Icon,
+  CloudUploadIcon,
   ArrowRight01Icon,
   Copy01Icon,
   Cursor01Icon,
@@ -289,81 +289,23 @@ export function CanvasSection() {
   )
 }
 
-/**
- * Each saved project previews its own animation, so the dashboard reads as
- * four different pieces of work rather than four identical dots.
- */
-const PROJECT_THUMBS: { name: string; visual: React.ReactNode }[] = [
-  {
-    name: "Bouncing ball",
-    visual: (
-      <svg viewBox="0 0 40 40" className="size-full text-black/15">
-        <line
-          x1="7"
-          y1="31"
-          x2="33"
-          y2="31"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <ellipse cx="20" cy="27" rx="8" ry="5" className="fill-sky-500" />
-      </svg>
-    ),
-  },
-  {
-    name: "Pendulum",
-    visual: (
-      <svg viewBox="0 0 40 40" className="size-full text-black/25">
-        <line
-          x1="20"
-          y1="7"
-          x2="29"
-          y2="26"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <circle cx="20" cy="7" r="2" fill="currentColor" />
-        <circle cx="29" cy="28" r="6" className="fill-sky-500" />
-      </svg>
-    ),
-  },
-  {
-    name: "Wave",
-    visual: (
-      <svg viewBox="0 0 40 40" className="size-full">
-        {[7, 15, 23, 31].map((cx, i) => (
-          <circle
-            key={cx}
-            cx={cx}
-            cy={[26, 16, 24, 12][i]}
-            r="3.5"
-            className="fill-sky-500"
-          />
-        ))}
-      </svg>
-    ),
-  },
-  {
-    name: "Orbit",
-    visual: (
-      <svg viewBox="0 0 40 40" className="size-full text-black/20">
-        <circle
-          cx="20"
-          cy="20"
-          r="12"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <circle cx="20" cy="20" r="4" fill="currentColor" />
-        <circle cx="32" cy="20" r="3.5" className="fill-sky-500" />
-        <circle cx="12" cy="30" r="3.5" className="fill-sky-500" />
-      </svg>
-    ),
-  },
-]
+/** The same ball, drawn once and picked up on whatever screen is next. */
+function DeviceBall({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 60 40" className={cn("text-black/15", className)}>
+      <line
+        x1="12"
+        y1="31"
+        x2="48"
+        y2="31"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="30" cy="24" r="6" className="fill-sky-500" />
+    </svg>
+  )
+}
 
 /** Section 7 — cloud projects. */
 export function CloudSection() {
@@ -380,26 +322,40 @@ export function CloudSection() {
             "Import a reference image to trace",
           ]}
         />
-        <Panel>
-          <div className="flex items-center gap-2 border-b pb-3">
-            <HugeiconsIcon icon={Album01Icon} className="size-4" strokeWidth={1.8} />
-            <span className="text-xs font-medium">My animations</span>
-            <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-              4 projects
-            </span>
+        <Panel className="relative flex min-h-56 items-center justify-center bg-muted/30">
+          {/* Laptop */}
+          <div className="w-full max-w-[15rem] overflow-hidden rounded-lg border bg-background shadow-sm">
+            <div className="flex h-5 items-center gap-1 border-b px-2">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="size-1.5 rounded-full bg-muted-foreground/25"
+                />
+              ))}
+              <span className="ml-1 truncate text-[8px] text-muted-foreground">
+                Bouncing ball
+              </span>
+            </div>
+            <div className="flex aspect-video items-center justify-center bg-white">
+              <DeviceBall className="h-3/4 w-auto" />
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-3">
-            {PROJECT_THUMBS.map(({ name, visual }) => (
-              <div key={name} className="flex flex-col gap-1.5">
-                <span className="flex aspect-square items-center justify-center rounded-md bg-white p-2 ring-1 ring-black/10">
-                  {visual}
-                </span>
-                <span className="truncate text-[11px] text-muted-foreground">
-                  {name}
-                </span>
-              </div>
-            ))}
+
+          {/* Phone, holding the same project */}
+          <div className="absolute right-5 bottom-5 w-16 overflow-hidden rounded-lg border-2 border-background bg-background shadow-lg ring-1 ring-border">
+            <div className="flex aspect-[9/16] items-center justify-center bg-white">
+              <DeviceBall className="w-full" />
+            </div>
           </div>
+
+          <span className="absolute top-4 left-4 flex items-center gap-1.5 rounded-full border bg-background px-2 py-1 text-[10px] font-medium shadow-sm">
+            <HugeiconsIcon
+              icon={CloudUploadIcon}
+              className="size-3 text-sky-500"
+              strokeWidth={2}
+            />
+            All changes saved
+          </span>
         </Panel>
       </Split>
     </section>
