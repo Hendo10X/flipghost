@@ -39,13 +39,13 @@ export default function Page() {
               </p>
             </div>
             <div className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards flex items-center gap-3 delay-150 duration-500 ease-out motion-reduce:animate-none">
-              <Button render={<Link href="/signup" />} size="lg" className="px-4">
+              <Button render={<Link href="/signup" />} size="xl" className="px-4">
                 Get started
               </Button>
               <Button
                 render={<Link href="/workshop" />}
                 variant="outline"
-                size="lg"
+                size="xl"
                 className="px-4"
               >
                 Try the editor

@@ -209,7 +209,11 @@ function CompactMenu() {
             variant="ghost"
             size="icon-lg"
             aria-label="Open menu"
-            className="text-muted-foreground lg:hidden"
+            // Below `lg` this is the only way to reach navigation at all, and
+            // 32px is a small thing to ask a thumb to find. The pseudo-element
+            // takes the hit area to 44px without taking the button with it, so
+            // the bar keeps the height the rest of the layout is built around.
+            className="relative text-muted-foreground before:absolute before:-inset-1.5 before:content-[''] lg:hidden"
           >
             <HugeiconsIcon icon={Menu01Icon} strokeWidth={1.8} />
           </Button>
@@ -239,7 +243,7 @@ function CompactMenu() {
                   variant="ghost"
                   size="icon-lg"
                   aria-label="Close menu"
-                  className="text-muted-foreground"
+                  className="relative text-muted-foreground before:absolute before:-inset-1.5 before:content-['']"
                 >
                   <HugeiconsIcon icon={Cancel01Icon} strokeWidth={1.8} />
                 </Button>

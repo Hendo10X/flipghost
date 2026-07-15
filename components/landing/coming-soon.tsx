@@ -53,7 +53,7 @@ export function ComingSoon({
           <div className="flex flex-wrap items-center gap-3">
             <Button
               render={<Link href="/workshop" />}
-              size="lg"
+              size="xl"
               className="px-4"
             >
               Open the workshop
@@ -61,7 +61,7 @@ export function ComingSoon({
             <Button
               render={<Link href="/showcase" />}
               variant="outline"
-              size="lg"
+              size="xl"
               className="px-4"
             >
               Browse the showcase

@@ -94,6 +94,9 @@ export function ProfileForm({ userId, name, email }: ProfileFormProps) {
           />
           <Button
             size="lg"
+            // Matches the Input beside it, which is h-9. No size in the scale
+            // is, and a control paired with a field should share its height.
+            className="h-9"
             disabled={
               savingName ||
               !displayName.trim() ||

@@ -106,7 +106,7 @@ export default function SignUpPage() {
           </p>
         )}
 
-        <Button type="submit" size="lg" disabled={pending} className="w-full">
+        <Button type="submit" size="xl" disabled={pending} className="w-full">
           {pending && (
             <HugeiconsIcon
               icon={Loading03Icon}
@@ -126,7 +126,7 @@ export default function SignUpPage() {
       <Button
         type="button"
         variant="outline"
-        size="lg"
+        size="xl"
         disabled={googlePending}
         onClick={onGoogle}
         className="w-full"

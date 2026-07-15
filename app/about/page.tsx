@@ -139,13 +139,13 @@ export default function AboutPage() {
             takes about ten minutes to find out whether we are right.
           </p>
           <div className="flex flex-wrap items-center gap-3">
-            <Button render={<Link href="/workshop" />} size="lg" className="px-4">
+            <Button render={<Link href="/workshop" />} size="xl" className="px-4">
               Open the workshop
             </Button>
             <Button
               render={<Link href="/showcase" />}
               variant="outline"
-              size="lg"
+              size="xl"
               className="px-4"
             >
               Browse the showcase

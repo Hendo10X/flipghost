@@ -374,7 +374,10 @@ export function HotkeysSection() {
           title="Hands stay on the keys"
           description="Every tool and every frame is one keystroke away, and you can rebind any of them to whatever your hands already know."
         />
-        <Panel className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+        {/* One column on a phone. Two columns of ~127px each cannot hold
+            "Toggle onion skin", and a section whose whole job is to show the
+            shortcuts was truncating them mid-word. */}
+        <Panel className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
           {HOTKEY_ACTIONS.map(({ action, label }) => (
             <div key={action} className="flex items-center justify-between gap-2">
               <span className="truncate text-xs text-muted-foreground">
@@ -411,13 +414,13 @@ export function CtaSection() {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-3">
-          <Button render={<Link href="/signup" />} size="lg" className="px-4">
+          <Button render={<Link href="/signup" />} size="xl" className="px-4">
             Get started
           </Button>
           <Button
             render={<Link href="/workshop" />}
             variant="outline"
-            size="lg"
+            size="xl"
             className="px-4"
           >
             Try the editor

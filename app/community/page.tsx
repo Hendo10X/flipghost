@@ -98,7 +98,7 @@ function JoinButton({ className }: { className?: string }) {
       render={
         <a href={DISCORD_URL} target="_blank" rel="noreferrer noopener" />
       }
-      size="lg"
+      size="xl"
       className={className}
     >
       <HugeiconsIcon icon={DiscordIcon} strokeWidth={1.8} />
@@ -133,7 +133,7 @@ export default function CommunityPage() {
             <Button
               render={<Link href="/workshop" />}
               variant="outline"
-              size="lg"
+              size="xl"
               className="px-4"
             >
               Open the workshop

@@ -28,13 +28,13 @@ export default function NotFound() {
         <LostFrame className="mt-12 w-full" />
 
         <div className="mt-12 flex flex-wrap items-center justify-center gap-3">
-          <Button render={<Link href="/" />} size="lg" className="px-4">
+          <Button render={<Link href="/" />} size="xl" className="px-4">
             Back home
           </Button>
           <Button
             render={<Link href="/workshop" />}
             variant="outline"
-            size="lg"
+            size="xl"
             className="px-4"
           >
             Draw it yourself
