@@ -68,9 +68,11 @@ export function Article({
 
           {/* Marble's editor emits sanitised HTML, so it is injected rather
               than parsed. prose comes from the fumadocs preset that /docs
-              already uses, which keeps articles and docs reading alike. */}
+              already uses, which keeps articles and docs reading alike;
+              cms-prose covers what that plugin leaves to fumadocs' own MDX
+              pipeline, which CMS HTML never passes through. */}
           <div
-            className="prose mt-10"
+            className="prose cms-prose mt-10"
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
 

@@ -76,7 +76,7 @@ export default async function ChangelogPage() {
                     --tw-prose-size. An entry is a note, not an essay, so it
                     reads a step down from a blog post. */}
                 <div
-                  className="prose [--tw-prose-size:0.9]"
+                  className="prose cms-prose [--tw-prose-size:0.9]"
                   dangerouslySetInnerHTML={{ __html: entry.content }}
                 />
               </li>

@@ -145,3 +145,50 @@
     @apply font-sans;
     }
 }
+
+/* Sits alongside `prose` on HTML that came from Marble rather than from our
+   own MDX. The prose plugin ships with fumadocs, which compiles code blocks
+   into a Shiki component before they ever reach prose, so it styles inline
+   `code` and never styles `pre` at all. Raw CMS HTML has no such pipeline: a
+   bare <pre> keeps white-space: pre, refuses to wrap, grows to its longest
+   line and drags the page sideways on a phone.
+   Scoped rather than applied to `prose` itself so /docs keeps its own code
+   blocks untouched. */
+@layer components {
+  .cms-prose {
+    /* A pasted URL is one long unbreakable token. */
+    overflow-wrap: break-word;
+  }
+
+  .cms-prose :where(pre) {
+    overflow-x: auto;
+    padding: 1rem;
+    border: 1px solid var(--color-fd-border);
+    border-radius: 0.5rem;
+    background: var(--color-fd-muted);
+    font-size: calc(13px * var(--tw-prose-size, 1));
+    line-height: 1.6;
+  }
+
+  /* prose gives every `code` a border and a background, which is right inline
+     and wrong wrapped around each line of a block. */
+  .cms-prose :where(pre code) {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: inherit;
+  }
+
+  /* Same failure mode as pre, waiting for the first post with a table or an
+     embed in it. Making the table a block is what lets it scroll on its own
+     instead of widening the article. */
+  .cms-prose :where(table) {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .cms-prose :where(iframe),
+  .cms-prose :where(video) {
+    max-width: 100%;
+  }
+}
