@@ -122,7 +122,10 @@ export function CanvasStage() {
     let canvas: Canvas | null = null
 
     async function init() {
-      const { Canvas, PencilBrush } = await import("fabric")
+      const [{ Canvas }, { PressureBrush }] = await Promise.all([
+        import("fabric"),
+        import("@/lib/flipbook/pressure-brush"),
+      ])
       if (disposed || !canvasElRef.current) return
 
       canvas = new Canvas(canvasElRef.current, {
@@ -131,8 +134,11 @@ export function CanvasStage() {
         perPixelTargetFind: true,
         targetFindTolerance: 12,
         enableRetinaScaling: true,
+        // Fabric defaults to mouse + touch events, which carry no pressure or
+        // pointer type. Pointer events are what let a stylus draw as a stylus.
+        enablePointerEvents: true,
       })
-      canvas.freeDrawingBrush = new PencilBrush(canvas)
+      canvas.freeDrawingBrush = new PressureBrush(canvas)
       fabricRef.current = canvas
 
       const commit = () => {
