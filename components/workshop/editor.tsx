@@ -42,6 +42,8 @@ export function Editor({
     let disposed = false
     let unsubscribe: (() => void) | undefined
     let timer: ReturnType<typeof setTimeout> | undefined
+    let flush: (() => void) | undefined
+    let onHide: (() => void) | undefined
 
     async function boot() {
       if (initialProject && initialProject.frames.length > 0) {
@@ -106,46 +108,100 @@ export function Editor({
 
       // Watch the persistable slice; ignore tool/playback churn.
       let previous = snapshotFromState(useFlipbook.getState())
+
+      /**
+       * A version, not a boolean. The debounce is re-armed by *any* snapshot
+       * change, and the snapshot includes currentId and the brush settings, so
+       * a per-notification "did content change" flag gets replaced by the next
+       * innocent change and the edit it was standing for is dropped. Drawing a
+       * stroke and stepping to the next frame within the window — the normal
+       * way anyone animates — silently threw the stroke away.
+       *
+       * savedVersion only moves on a successful write, so a failed save is
+       * retried by the next edit rather than forgotten.
+       */
+      let contentVersion = 0
+      let savedVersion = 0
+      let pending = false
+
+      // Saves are chained rather than raced: two POSTs for one project can
+      // land out of order and the loser overwrites the newer drawing.
+      let queue: Promise<void> = Promise.resolve()
+
+      function runSave() {
+        pending = false
+        queue = queue.then(async () => {
+          const s = useFlipbook.getState()
+          if (!s.projectId) {
+            await saveLocalSnapshot(snapshotFromState(s))
+            return
+          }
+          // Read inside the queue: an edit may have arrived while the previous
+          // save was still in flight.
+          const version = contentVersion
+          if (version === savedVersion) return
+
+          s.setCloudStatus("saving")
+          try {
+            await saveProjectToCloud({
+              projectId: s.projectId,
+              title: s.title,
+              fps: s.fps,
+              stagePresetId: s.stagePresetId,
+              frames: s.frames,
+            })
+            savedVersion = version
+            useFlipbook.getState().setCloudStatus("saved")
+          } catch {
+            useFlipbook.getState().setCloudStatus("error")
+          }
+        })
+      }
+
+      flush = () => {
+        if (!pending) return
+        clearTimeout(timer)
+        runSave()
+      }
+
       unsubscribe = useFlipbook.subscribe((state) => {
         const next = snapshotFromState(state)
         if (!snapshotChanged(next, previous)) return
 
-        const contentChanged =
+        if (
           next.frames !== previous.frames ||
           next.title !== previous.title ||
           next.fps !== previous.fps ||
           next.stagePresetId !== previous.stagePresetId
+        ) {
+          contentVersion++
+        }
         previous = next
 
+        pending = true
         clearTimeout(timer)
-        timer = setTimeout(async () => {
-          const s = useFlipbook.getState()
-          if (s.projectId) {
-            if (!contentChanged) return
-            s.setCloudStatus("saving")
-            try {
-              await saveProjectToCloud({
-                projectId: s.projectId,
-                title: s.title,
-                fps: s.fps,
-                stagePresetId: s.stagePresetId,
-                frames: s.frames,
-              })
-              useFlipbook.getState().setCloudStatus("saved")
-            } catch {
-              useFlipbook.getState().setCloudStatus("error")
-            }
-          } else {
-            saveLocalSnapshot(snapshotFromState(s))
-          }
-        }, 1500)
+        timer = setTimeout(runSave, 1500)
       })
+
+      // Everything drawn in the last 1.5s exists only in memory. Hiding the
+      // tab is the last moment we are reliably given, so spend it. A true
+      // unload-time flush is not available: sendBeacon and fetch keepalive cap
+      // at ~64KB and a single frame is a base64 PNG well past that.
+      onHide = () => {
+        if (document.visibilityState === "hidden") flush?.()
+      }
+      document.addEventListener("visibilitychange", onHide)
     }
 
     boot()
     return () => {
       disposed = true
       unsubscribe?.()
+      if (onHide) document.removeEventListener("visibilitychange", onHide)
+      // Flush rather than clear. Clicking a link out of the workshop unmounts
+      // this within the debounce window, and cancelling the timer here threw
+      // away the last thing drawn without ever writing it.
+      flush?.()
       clearTimeout(timer)
     }
   }, [initialProject, initialNew, initialDemoId])
