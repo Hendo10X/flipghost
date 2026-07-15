@@ -14,16 +14,30 @@ export const metadata: Metadata = {
   title: "Workshop | Flipghost",
 }
 
-async function loadProject(id: string): Promise<InitialProject | null> {
-  const session = await auth.api
-    .getSession({ headers: await headers() })
-    .catch(() => null)
-  if (!session) redirect("/signin")
+/** One unreadable row should cost that frame, not the whole animation. */
+function parseFrameJson(raw: string | null): FrameJSON | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as FrameJSON
+  } catch {
+    return null
+  }
+}
 
+/**
+ * Takes userId rather than resolving the session itself: the caller has to do
+ * that anyway to redirect a signed-out visitor, and `redirect()` works by
+ * throwing. Called from inside a `.catch()`, it would have had its own
+ * redirect swallowed and been sent somewhere else entirely.
+ */
+async function loadProject(
+  id: string,
+  userId: string,
+): Promise<InitialProject | null> {
   const [project] = await db
     .select()
     .from(projects)
-    .where(and(eq(projects.id, id), eq(projects.userId, session.user.id)))
+    .where(and(eq(projects.id, id), eq(projects.userId, userId)))
   if (!project) return null
 
   const frameRows = await db
@@ -39,7 +53,7 @@ async function loadProject(id: string): Promise<InitialProject | null> {
     stagePresetId: project.resolution,
     frames: frameRows.map((row) => ({
       id: crypto.randomUUID(),
-      json: row.canvasDataUrl ? (JSON.parse(row.canvasDataUrl) as FrameJSON) : null,
+      json: parseFrameJson(row.canvasDataUrl),
       dataUrl: row.thumbnailUrl,
     })),
   }
@@ -54,7 +68,14 @@ export default async function WorkshopPage({
   let initialProject: InitialProject | null = null
 
   if (p) {
-    initialProject = await loadProject(p).catch(() => null)
+    const session = await auth.api
+      .getSession({ headers: await headers() })
+      .catch(() => null)
+    // Outside the catch below, so it is the visitor who gets redirected here
+    // and not the redirect itself that gets caught.
+    if (!session) redirect("/signin")
+
+    initialProject = await loadProject(p, session.user.id).catch(() => null)
     if (!initialProject) redirect("/projects")
   }
 
