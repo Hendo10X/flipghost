@@ -69,7 +69,7 @@ export function LandingNav() {
         <Wordmark />
       </Link>
 
-      <NavigationMenu.Root className="col-start-2 hidden justify-self-center md:block">
+      <NavigationMenu.Root className="col-start-2 hidden justify-self-center lg:block">
         <NavigationMenu.List className="flex items-center gap-1">
           <NavigationMenu.Item>
             <NavigationMenu.Trigger className={triggerClass}>
@@ -178,24 +178,29 @@ export function LandingNav() {
           render={<Link href="/signin" />}
           variant="ghost"
           size="lg"
-          className="hidden text-muted-foreground hover:text-foreground md:inline-flex"
+          className="hidden text-muted-foreground hover:text-foreground sm:inline-flex"
         >
           Sign in
         </Button>
         <Button
           render={<Link href="/signup" />}
           size="lg"
-          className="hidden px-3 md:inline-flex"
+          className="hidden px-3 sm:inline-flex"
         >
           Get started
         </Button>
-        <MobileMenu />
+        <CompactMenu />
       </div>
     </header>
   )
 }
 
-function MobileMenu() {
+/**
+ * The nav for phones and tablets. Tablets are the primary target, so the
+ * sign in and get started buttons stay in the header alongside this, and
+ * only the Product/Resources dropdowns collapse in here.
+ */
+function CompactMenu() {
   return (
     <Dialog.Root>
       <Dialog.Trigger
@@ -204,7 +209,7 @@ function MobileMenu() {
             variant="ghost"
             size="icon-lg"
             aria-label="Open menu"
-            className="text-muted-foreground md:hidden"
+            className="text-muted-foreground lg:hidden"
           >
             <HugeiconsIcon icon={Menu01Icon} strokeWidth={1.8} />
           </Button>
@@ -213,14 +218,14 @@ function MobileMenu() {
       <Dialog.Portal>
         <Dialog.Backdrop
           className={cn(
-            "fixed inset-0 z-40 bg-black/40 md:hidden",
+            "fixed inset-0 z-40 bg-black/40 lg:hidden",
             "transition-opacity duration-200 ease-out",
             "data-[starting-style]:opacity-0 data-[ending-style]:opacity-0"
           )}
         />
         <Dialog.Popup
           className={cn(
-            "fixed inset-x-0 top-0 z-50 flex flex-col gap-1 border-b bg-popover px-4 pt-4 pb-5 text-popover-foreground shadow-lg outline-none md:hidden",
+            "fixed inset-x-0 top-0 z-50 flex flex-col gap-1 border-b bg-popover px-4 pt-4 pb-5 text-popover-foreground shadow-lg outline-none lg:hidden",
             "transition-transform duration-200 ease-out",
             "data-[starting-style]:-translate-y-full data-[ending-style]:-translate-y-full"
           )}
@@ -249,7 +254,7 @@ function MobileMenu() {
             <Link
               key={item.title}
               href={item.href}
-              className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+              className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted sm:py-3"
             >
               <HugeiconsIcon
                 icon={item.icon}
@@ -267,7 +272,7 @@ function MobileMenu() {
             <Link
               key={item.label}
               href={item.href}
-              className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+              className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted sm:py-3"
             >
               {item.label}
             </Link>
@@ -275,18 +280,19 @@ function MobileMenu() {
 
           <Link
             href="/pricing"
-            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted sm:py-3"
           >
             Pricing
           </Link>
           <Link
             href="/showcase"
-            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted"
+            className="rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted sm:py-3"
           >
             Showcase
           </Link>
 
-          <div className="mt-3 flex flex-col gap-2">
+          {/* Phones only: from sm up these same two live in the header. */}
+          <div className="mt-3 flex flex-col gap-2 sm:hidden">
             <Button
               render={<Link href="/signup" />}
               size="lg"

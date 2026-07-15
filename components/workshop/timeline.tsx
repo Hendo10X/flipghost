@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   ArrowDown01Icon,
   Copy01Icon,
@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { FPS_OPTIONS, ONION_MAX, useFlipbook } from "@/lib/flipbook/store"
+import { usePrefersReducedMotion } from "@/lib/use-reduced-motion"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -106,7 +107,7 @@ function OnionSettings() {
                     aria-checked={row.value === count}
                     onClick={() => row.onChange(count)}
                     className={cn(
-                      "flex-1 rounded-[5px] py-0.5 text-xs tabular-nums transition-colors select-none",
+                      "flex-1 rounded-[5px] py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:py-2",
                       row.value === count
                         ? "bg-background text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
@@ -160,10 +161,25 @@ export function Timeline() {
   const currentIndex = frames.findIndex((f) => f.id === currentId)
   const dragIndex = useRef<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const reducedMotion = usePrefersReducedMotion()
+
+  // Stepping frames with the hotkeys moves the selection, which would
+  // otherwise walk straight off the end of the strip and out of sight.
+  useEffect(() => {
+    const el = stripRef.current?.querySelector(`[data-frame-id="${currentId}"]`)
+    el?.scrollIntoView({
+      behavior: reducedMotion ? "auto" : "smooth",
+      block: "nearest",
+      inline: "nearest",
+    })
+  }, [currentId, reducedMotion])
 
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-3">
-      <div className="flex items-center gap-3">
+      {/* Height and a floor on width, rather than a square: the onion skin
+          toggle carries a label and must stay its natural width. */}
+      <div className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -204,7 +220,7 @@ export function Timeline() {
               aria-checked={fps === option}
               onClick={() => setFps(option)}
               className={cn(
-                "rounded-[5px] px-2 py-0.5 text-xs tabular-nums transition-colors select-none",
+                "rounded-[5px] px-2 py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:px-3 pointer-coarse:py-2",
                 fps === option
                   ? "bg-background text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
@@ -280,11 +296,12 @@ export function Timeline() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
+      <div ref={stripRef} className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
         {frames.map((frame, index) => (
           <button
             key={frame.id}
             type="button"
+            data-frame-id={frame.id}
             draggable
             onDragStart={() => {
               dragIndex.current = index
@@ -323,7 +340,7 @@ export function Timeline() {
                 src={frame.dataUrl}
                 alt=""
                 draggable={false}
-                className="size-full object-cover select-none"
+                className="size-full object-contain select-none"
               />
             )}
             <span className="absolute bottom-0.5 left-1.5 text-[10px] font-medium text-black/40 select-none">

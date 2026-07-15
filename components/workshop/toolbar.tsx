@@ -48,7 +48,9 @@ export function Toolbar() {
   )
 
   return (
-    <aside className="flex w-12 flex-col items-center gap-1 border-r py-3">
+    // Every control in here is icon-only, so on touch they all grow to a 44px
+    // target together and the rail widens to hold them.
+    <aside className="flex w-12 flex-col items-center gap-1 border-r py-3 pointer-coarse:w-16 pointer-coarse:[&_[data-slot=button]]:size-11">
       {TOOLS.map(({ tool: t, label, icon }) => (
         <Tooltip key={t}>
           <TooltipTrigger

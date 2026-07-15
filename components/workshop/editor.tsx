@@ -15,7 +15,7 @@ import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
 import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
-import { DesktopOnlyNotice } from "@/components/workshop/desktop-only-notice"
+import { SmallScreenNotice } from "@/components/workshop/small-screen-notice"
 import { WorkshopHeader } from "@/components/workshop/header"
 import { Timeline } from "@/components/workshop/timeline"
 import { Toolbar } from "@/components/workshop/toolbar"
@@ -228,7 +228,7 @@ export function Editor({
 
   return (
     <TooltipProvider>
-      <DesktopOnlyNotice />
+      <SmallScreenNotice />
       <div className="hidden h-dvh flex-col md:flex">
         <WorkshopHeader />
         <div className="flex min-h-0 flex-1">

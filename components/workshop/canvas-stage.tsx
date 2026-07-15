@@ -23,39 +23,14 @@ import {
 /** Padding around the stage inside the scrollable viewport (p-6 = 24px). */
 const VIEWPORT_PAD = 48
 
-/** Recolors a stroke snapshot to a flat tint for onion skinning. */
-function useTintedImage(dataUrl: string | null, color: string) {
-  const [tinted, setTinted] = useState<{
-    source: string
-    result: string
-  } | null>(null)
-
-  useEffect(() => {
-    if (!dataUrl) return
-    let cancelled = false
-    const img = new Image()
-    img.onload = () => {
-      if (cancelled) return
-      const canvas = document.createElement("canvas")
-      canvas.width = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext("2d")!
-      ctx.drawImage(img, 0, 0)
-      ctx.globalCompositeOperation = "source-in"
-      ctx.fillStyle = color
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      setTinted({ source: dataUrl, result: canvas.toDataURL() })
-    }
-    img.src = dataUrl
-    return () => {
-      cancelled = true
-    }
-  }, [dataUrl, color])
-
-  return dataUrl && tinted?.source === dataUrl ? tinted.result : null
-}
-
-/** One ghosted neighbouring frame layered under the drawing surface. */
+/**
+ * One ghosted neighbouring frame layered under the drawing surface.
+ *
+ * The snapshot's alpha is used as a CSS mask over a flat fill, which tints the
+ * strokes without touching the pixels. Doing this on an offscreen canvas
+ * instead would mean a decode and a PNG re-encode per ghost every time the
+ * frame changes, which is felt as lag while stepping along the timeline.
+ */
 function OnionLayer({
   dataUrl,
   color,
@@ -65,19 +40,31 @@ function OnionLayer({
   color: string
   opacity: number
 }) {
-  const tinted = useTintedImage(dataUrl, color)
-  if (!tinted) return null
+  if (!dataUrl) return null
+  const mask = `url("${dataUrl}") 0 0 / 100% 100% no-repeat`
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- data URL, not optimizable
-    <img
-      src={tinted}
-      alt=""
+    <div
       aria-hidden
-      draggable={false}
-      style={{ opacity }}
-      className="pointer-events-none absolute inset-0 size-full select-none"
+      style={{ backgroundColor: color, opacity, mask, WebkitMask: mask }}
+      className="pointer-events-none absolute inset-0 select-none"
     />
   )
+}
+
+/**
+ * A ring the size of the brush, drawn white over black so it stays visible on
+ * both bare paper and dark strokes. Sized in screen pixels, so it tracks zoom.
+ */
+function brushCursor(diameter: number) {
+  const d = Math.max(4, Math.min(128, diameter))
+  const size = d + 4
+  const c = size / 2
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">` +
+    `<circle cx="${c}" cy="${c}" r="${d / 2}" fill="none" stroke="#fff" stroke-width="2.5"/>` +
+    `<circle cx="${c}" cy="${c}" r="${d / 2}" fill="none" stroke="#000" stroke-width="1"/>` +
+    `</svg>`
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`
 }
 
 export function CanvasStage() {
@@ -322,6 +309,14 @@ export function CanvasStage() {
     }
   }, [tool, brushColor, brushSize, ready])
 
+  // --- Brush cursor: a ring matching the stroke it will lay down ---
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !ready || tool !== "brush" || scale <= 0) return
+    // brushSize is in stage units, so scale it into screen pixels.
+    canvas.freeDrawingCursor = brushCursor(brushSize * scale)
+  }, [tool, brushSize, scale, ready])
+
   // --- Select-tool keyboard: delete selection, escape to deselect ---
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -421,8 +416,11 @@ export function CanvasStage() {
   return (
     <div className="relative flex min-h-0 flex-1">
       <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
-        {/* Grows with the stage so nothing is clipped when zoomed in. */}
-        <div className="flex min-h-full min-w-full items-center justify-center p-6">
+        {/* Sized to the stage (w-max/h-max) but never smaller than the
+            viewport, so centring applies only when there is room to spare.
+            Plain justify-center would push the overflow of a zoomed-in stage
+            to negative offsets, where scrolling cannot reach it. */}
+        <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
             className="relative shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-black/10"
             style={{ width: displayWidth, height: displayHeight }}
