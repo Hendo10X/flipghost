@@ -13,9 +13,11 @@ import {
   ToolboxSection,
 } from "@/components/landing/feature-panels"
 import { HeroDemo } from "@/components/landing/hero-demo"
+import { HowItWorks } from "@/components/landing/how-it-works"
 import { LandingNav } from "@/components/landing/landing-nav"
 import { Section } from "@/components/landing/section"
 import { ShowcaseGrid } from "@/components/landing/showcase-grid"
+import { SiteFooter } from "@/components/landing/site-footer"
 
 export default function Page() {
   return (
@@ -72,7 +74,16 @@ export default function Page() {
           <FeatureBento />
         </Section>
 
-        {/* 3-9 */}
+        {/* 3 — Stacked walkthrough */}
+        <Section
+          eyebrow="How it works"
+          title="Four steps, start to finish"
+          description="From a blank canvas to a file you can post, without leaving the tab."
+        >
+          <HowItWorks />
+        </Section>
+
+        {/* 4-10 */}
         <OnionSection />
         <ToolboxSection />
         <TimelineSection />
@@ -82,6 +93,8 @@ export default function Page() {
         <HotkeysSection />
         <CtaSection />
       </main>
+
+      <SiteFooter />
     </div>
   )
 }

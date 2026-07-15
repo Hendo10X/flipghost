@@ -6,9 +6,7 @@ import {
   Cursor01Icon,
   Delete02Icon,
   EraserIcon,
-  Film01Icon,
   GhostIcon,
-  Gif01Icon,
   PencilEdit02Icon,
   PlusSignIcon,
 } from "@hugeicons/core-free-icons"
@@ -18,6 +16,7 @@ import { STAGE_PRESETS } from "@/lib/flipbook/store"
 import { HOTKEY_ACTIONS, HOTKEY_DEFAULTS, formatHotkey } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { ExportProgress } from "@/components/landing/export-progress"
 import { Panel, Section } from "@/components/landing/section"
 
 /** Two-column feature layout; the visual can lead on wide screens. */
@@ -188,24 +187,45 @@ export function TimelineSection() {
               </span>
             ))}
           </div>
-          <div className="flex gap-2 overflow-hidden pt-3">
-            {Array.from({ length: 7 }, (_, i) => (
-              <span
-                key={i}
-                className={cn(
-                  "relative flex size-12 shrink-0 items-center justify-center rounded-md bg-white ring-1 ring-black/10",
-                  i === 2 && "ring-2 ring-sky-500"
-                )}
-              >
+          {/* No overflow-hidden here: it clipped the frames' 1px ring along
+              the bottom. The Panel already crops the strip at its edge. */}
+          <div className="flex gap-2 pt-3">
+            {Array.from({ length: 7 }, (_, i) => {
+              // Frames of one bounce, so the strip reads as motion.
+              const lift = Math.abs(Math.sin(Math.PI * (i / 7)))
+              const touching = lift < 0.05
+              return (
                 <span
-                  className="rounded-full bg-sky-500"
-                  style={{ width: 8 + i * 2, height: 8 + i * 2 }}
-                />
-                <span className="absolute bottom-0.5 left-1 text-[9px] text-black/40 tabular-nums">
-                  {i + 1}
+                  key={i}
+                  className={cn(
+                    "relative size-12 shrink-0 overflow-hidden rounded-md bg-white ring-1 ring-black/10",
+                    i === 2 && "ring-2 ring-sky-500"
+                  )}
+                >
+                  <svg viewBox="0 0 48 48" className="size-full text-black/15">
+                    <line
+                      x1="8"
+                      y1="38"
+                      x2="40"
+                      y2="38"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <ellipse
+                      cx="24"
+                      cy={36 - lift * 20}
+                      rx={touching ? 9 : 7}
+                      ry={touching ? 5 : 7}
+                      className="fill-sky-500"
+                    />
+                  </svg>
+                  <span className="absolute bottom-0.5 left-1 text-[9px] text-black/40 tabular-nums">
+                    {i + 1}
+                  </span>
                 </span>
-              </span>
-            ))}
+              )
+            })}
           </div>
         </Panel>
       </Split>
@@ -223,27 +243,8 @@ export function ExportSection() {
           title="Finish in the browser"
           description="Rendering happens on your machine, not a server queue. Hit export and your file downloads at full resolution."
         />
-        <Panel className="flex flex-col gap-3">
-          {[
-            { icon: Gif01Icon, label: "Looping GIF", meta: "1080×1080", pct: 100 },
-            { icon: Film01Icon, label: "MP4 video", meta: "H.264", pct: 62 },
-          ].map(({ icon, label, meta, pct }) => (
-            <div key={label} className="rounded-lg border p-3">
-              <div className="flex items-center gap-2">
-                <HugeiconsIcon icon={icon} className="size-4" strokeWidth={1.8} />
-                <span className="text-xs font-medium">{label}</span>
-                <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
-                  {meta}
-                </span>
-              </div>
-              <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-muted">
-                <span
-                  style={{ width: `${pct}%` }}
-                  className="block h-full rounded-full bg-sky-500"
-                />
-              </div>
-            </div>
-          ))}
+        <Panel>
+          <ExportProgress />
         </Panel>
       </Split>
     </section>
@@ -288,6 +289,82 @@ export function CanvasSection() {
   )
 }
 
+/**
+ * Each saved project previews its own animation, so the dashboard reads as
+ * four different pieces of work rather than four identical dots.
+ */
+const PROJECT_THUMBS: { name: string; visual: React.ReactNode }[] = [
+  {
+    name: "Bouncing ball",
+    visual: (
+      <svg viewBox="0 0 40 40" className="size-full text-black/15">
+        <line
+          x1="7"
+          y1="31"
+          x2="33"
+          y2="31"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <ellipse cx="20" cy="27" rx="8" ry="5" className="fill-sky-500" />
+      </svg>
+    ),
+  },
+  {
+    name: "Pendulum",
+    visual: (
+      <svg viewBox="0 0 40 40" className="size-full text-black/25">
+        <line
+          x1="20"
+          y1="7"
+          x2="29"
+          y2="26"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <circle cx="20" cy="7" r="2" fill="currentColor" />
+        <circle cx="29" cy="28" r="6" className="fill-sky-500" />
+      </svg>
+    ),
+  },
+  {
+    name: "Wave",
+    visual: (
+      <svg viewBox="0 0 40 40" className="size-full">
+        {[7, 15, 23, 31].map((cx, i) => (
+          <circle
+            key={cx}
+            cx={cx}
+            cy={[26, 16, 24, 12][i]}
+            r="3.5"
+            className="fill-sky-500"
+          />
+        ))}
+      </svg>
+    ),
+  },
+  {
+    name: "Orbit",
+    visual: (
+      <svg viewBox="0 0 40 40" className="size-full text-black/20">
+        <circle
+          cx="20"
+          cy="20"
+          r="12"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        />
+        <circle cx="20" cy="20" r="4" fill="currentColor" />
+        <circle cx="32" cy="20" r="3.5" className="fill-sky-500" />
+        <circle cx="12" cy="30" r="3.5" className="fill-sky-500" />
+      </svg>
+    ),
+  },
+]
+
 /** Section 7 — cloud projects. */
 export function CloudSection() {
   return (
@@ -312,15 +389,10 @@ export function CloudSection() {
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2 pt-3">
-            {["Bouncing ball", "Pendulum", "Wave", "Orbit"].map((name, i) => (
+            {PROJECT_THUMBS.map(({ name, visual }) => (
               <div key={name} className="flex flex-col gap-1.5">
-                <span className="flex aspect-square items-center justify-center rounded-md bg-white ring-1 ring-black/10">
-                  <span
-                    className={cn(
-                      "rounded-full bg-sky-500",
-                      ["size-5", "size-7", "size-4", "size-6"][i]
-                    )}
-                  />
+                <span className="flex aspect-square items-center justify-center rounded-md bg-white p-2 ring-1 ring-black/10">
+                  {visual}
                 </span>
                 <span className="truncate text-[11px] text-muted-foreground">
                   {name}
