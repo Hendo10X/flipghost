@@ -54,7 +54,11 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    /* gap-6 is the design; it only tightens where the alternative is worse.
+       Below ~700px of viewport the card cannot fit, so it stops being centred
+       and pins to the top with the footer link pushed off screen. 16px of
+       rhythm is a cheaper thing to lose than the centring and the scroll. */
+    <div className="flex flex-col gap-4 [@media(min-height:700px)]:gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-balance">
           Create your account

@@ -53,7 +53,9 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    /* Matches signup: tightens only below ~700px of viewport, where the
+       alternative is the card overflowing and pinning to the top. */
+    <div className="flex flex-col gap-4 [@media(min-height:700px)]:gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-balance">
           Welcome back
