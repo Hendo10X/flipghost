@@ -30,6 +30,30 @@ const TOOLS: { tool: Tool; label: string; icon: typeof PencilEdit02Icon }[] = [
   { tool: "eraser", label: "Eraser (E)", icon: EraserIcon },
 ]
 
+/**
+ * Ten presets, because dragging a saturation square to find plain red is a
+ * silly way to spend a second you could have spent drawing. Fixed rather than
+ * editable: a palette the user can add to is a palette they expect to still be
+ * there tomorrow, and that means storing it per project and persisting it,
+ * which is a real feature rather than a toolbar tweak.
+ *
+ * Ink is the store's default brush colour, so the palette shows a selection
+ * the moment it opens rather than looking like nothing is chosen. Two rows of
+ * five at w-44 lines the grid up with the picker above it.
+ */
+const PALETTE = [
+  { name: "Ink", value: "#1a1a1a" },
+  { name: "White", value: "#ffffff" },
+  { name: "Grey", value: "#9ca3af" },
+  { name: "Red", value: "#ef4444" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Yellow", value: "#facc15" },
+  { name: "Green", value: "#22c55e" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Purple", value: "#8b5cf6" },
+  { name: "Pink", value: "#ec4899" },
+] as const
+
 export function Toolbar() {
   const tool = useFlipbook((s) => s.tool)
   const setTool = useFlipbook((s) => s.setTool)
@@ -98,6 +122,8 @@ export function Toolbar() {
           <TooltipContent side="right">Brush color</TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-auto">
+          {/* react-colorful is 200px wide by default, which is wider than this
+              popover. The w-44 here is what holds it in. */}
           <div className="flex flex-col gap-3 [&_.react-colorful]:h-44 [&_.react-colorful]:w-44">
             <HexColorPicker color={brushColor} onChange={setBrushColor} />
             <HexColorInput
@@ -107,6 +133,40 @@ export function Toolbar() {
               aria-label="Hex color"
               className="h-8 w-44 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30"
             />
+
+            <div className="h-px w-44 bg-border" />
+
+            {/* radiogroup mirrors the brush-size control below: same idiom,
+                one thing selected out of a fixed set. The grid sizes the
+                swatches, so they stay square and aligned to the picker. */}
+            <div
+              role="radiogroup"
+              aria-label="Palette"
+              className="grid w-44 grid-cols-5 gap-1"
+            >
+              {PALETTE.map(({ name, value }) => {
+                const selected = brushColor.toLowerCase() === value
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={name}
+                    data-cuelume-toggle
+                    onClick={() => setBrushColor(value)}
+                    style={{ backgroundColor: value }}
+                    className={cn(
+                      // The border is what keeps White visible against the
+                      // popover in light mode.
+                      "aspect-square rounded-md border ring-offset-popover outline-none",
+                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                      selected && "ring-2 ring-ring ring-offset-2"
+                    )}
+                  />
+                )
+              })}
+            </div>
           </div>
         </PopoverContent>
       </Popover>
