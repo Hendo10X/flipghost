@@ -23,7 +23,11 @@ export async function generateMetadata({
       description: post.description,
       type: "article",
       publishedTime: post.publishedAt,
-      images: post.coverImage ? [post.coverImage] : undefined,
+      // The key is omitted, not set to undefined. Next decides whether to use
+      // opengraph-image.tsx with hasOwnProperty("images"), so `images: undefined`
+      // still counts as "this page brought its own" and throws the generated
+      // card away — leaving a post with no cover image with no preview at all.
+      ...(post.coverImage ? { images: [post.coverImage] } : {}),
     },
   }
 }
