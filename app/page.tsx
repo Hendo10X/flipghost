@@ -38,18 +38,62 @@ export default function Page() {
                 canvas and start flipping.
               </p>
             </div>
-            <div className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards flex items-center gap-3 delay-150 duration-500 ease-out motion-reduce:animate-none">
-              <Button render={<Link href="/signup" />} size="xl" className="px-4">
-                Get started
-              </Button>
-              <Button
-                render={<Link href="/workshop" />}
-                variant="outline"
-                size="xl"
-                className="px-4"
-              >
-                Try the editor
-              </Button>
+            {/* The workshop starts at md — below that app/workshop renders the
+                "needs more room" notice instead. So the hero has to change its
+                mind at the same breakpoint, or it spends the whole phone
+                viewport recommending a thing the phone cannot open.
+
+                Both sets are in the markup and CSS picks one, matching how the
+                workshop itself gates. display:none keeps the hidden pair out
+                of the accessibility tree and out of tab order, so this reads
+                as one pair of buttons, not two. */}
+            <div className="animate-in fade-in-0 slide-in-from-bottom-2 fill-mode-backwards flex flex-col items-center gap-3 delay-150 duration-500 ease-out motion-reduce:animate-none">
+              {/* Phones. The showcase is the thing that genuinely works here:
+                  the demos play. Signing up still makes sense — the account is
+                  what carries the work to a laptop — it just should not be the
+                  loudest promise on a screen that cannot draw. */}
+              {/* Wraps rather than sits in one row: the two labels come to
+                  ~307px of the ~327px a 375px phone has, and a 320px screen
+                  has no chance. */}
+              <div className="flex flex-wrap items-center justify-center gap-3 md:hidden">
+                <Button
+                  render={<Link href="/showcase" />}
+                  size="xl"
+                  className="px-4"
+                >
+                  Browse the showcase
+                </Button>
+                <Button
+                  render={<Link href="/signup" />}
+                  variant="outline"
+                  size="xl"
+                  className="px-4"
+                >
+                  Get started
+                </Button>
+              </div>
+
+              {/* Tablet and up, where the editor actually opens. */}
+              <div className="hidden items-center gap-3 md:flex">
+                <Button render={<Link href="/signup" />} size="xl" className="px-4">
+                  Get started
+                </Button>
+                <Button
+                  render={<Link href="/workshop" />}
+                  variant="outline"
+                  size="xl"
+                  className="px-4"
+                >
+                  Try the editor
+                </Button>
+              </div>
+
+              {/* Said here, before the account, rather than after it. Someone
+                  who signs up on a phone should already know why. */}
+              <p className="text-xs text-pretty text-muted-foreground md:hidden">
+                Drawing needs a tablet or larger. Sign up and your work will be
+                waiting.
+              </p>
             </div>
           </div>
 
