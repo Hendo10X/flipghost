@@ -6,6 +6,7 @@ import {
   EraserIcon,
   PencilEdit02Icon,
   Redo02Icon,
+  Tick02Icon,
   Undo02Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -53,6 +54,22 @@ const PALETTE = [
   { name: "Purple", value: "#8b5cf6" },
   { name: "Pink", value: "#ec4899" },
 ] as const
+
+/**
+ * Whether a tick drawn on this swatch should be black or white. A ring around
+ * the selected swatch cannot work here: the grid is exactly as wide as the
+ * picker above it, so a ring sitting outside the swatch would push past that
+ * edge and knock the row out of line with everything else in the popover.
+ * The mark has to live inside the swatch, which means it has to survive both
+ * White and Ink.
+ */
+function needsDarkTick(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  // Rec. 601 luma: green reads far brighter to the eye than blue does.
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
+}
 
 export function Toolbar() {
   const tool = useFlipbook((s) => s.tool)
@@ -137,12 +154,13 @@ export function Toolbar() {
             <div className="h-px w-44 bg-border" />
 
             {/* radiogroup mirrors the brush-size control below: same idiom,
-                one thing selected out of a fixed set. The grid sizes the
-                swatches, so they stay square and aligned to the picker. */}
+                one thing selected out of a fixed set. Every ring here is inset
+                so nothing can spill outside its cell and break the w-44 column
+                the picker and the input keep. */}
             <div
               role="radiogroup"
               aria-label="Palette"
-              className="grid w-44 grid-cols-5 gap-1"
+              className="grid w-44 grid-cols-5 gap-1.5"
             >
               {PALETTE.map(({ name, value }) => {
                 const selected = brushColor.toLowerCase() === value
@@ -157,13 +175,24 @@ export function Toolbar() {
                     onClick={() => setBrushColor(value)}
                     style={{ backgroundColor: value }}
                     className={cn(
-                      // The border is what keeps White visible against the
-                      // popover in light mode.
-                      "aspect-square rounded-md border ring-offset-popover outline-none",
-                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                      selected && "ring-2 ring-ring ring-offset-2"
+                      "flex aspect-square items-center justify-center rounded-md outline-none",
+                      // Same inset hairline the trigger swatch uses. It is what
+                      // keeps White visible against a light popover.
+                      "ring-1 ring-black/15 ring-inset dark:ring-white/20",
+                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                     )}
-                  />
+                  >
+                    {selected && (
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        className={cn(
+                          "size-3.5",
+                          needsDarkTick(value) ? "text-black" : "text-white"
+                        )}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </button>
                 )
               })}
             </div>
