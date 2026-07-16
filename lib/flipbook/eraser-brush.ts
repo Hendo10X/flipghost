@@ -10,13 +10,19 @@ export class EraserBrush extends PencilBrush {
   }
 
   // 1. When drawing starts, prepare to paint directly onto the main canvas context
-  public onMouseDown(pointer: any, options: any) {
+  public onMouseDown(
+    pointer: Parameters<PencilBrush["onMouseDown"]>[0],
+    options: Parameters<PencilBrush["onMouseDown"]>[1]
+  ) {
     super.onMouseDown(pointer, options)
     this.isDrawingOnMain = true
   }
 
- // 2. Intercept active movement to draw directly on the main canvas with destination-out
-  public onMouseMove(pointer: any, options: any) {
+  // 2. Intercept active movement to draw directly on the main canvas with destination-out
+  public onMouseMove(
+    pointer: Parameters<PencilBrush["onMouseMove"]>[0],
+    options: Parameters<PencilBrush["onMouseMove"]>[1]
+  ) {
     if (!this.isDrawingOnMain) return
     super.onMouseMove(pointer, options)
 
@@ -25,11 +31,11 @@ export class EraserBrush extends PencilBrush {
 
     if (points.length > 1) {
       ctx.save()
-      
+
       // --- ALIGN COORDINATES TO MATCH ZOOM, PAN, AND RETINA SCALING ---
       const vpt = this.canvas.viewportTransform
       const dpr = this.canvas.enableRetinaScaling ? (window.devicePixelRatio || 1) : 1
-      
+
       // Reset the context's matrix to match Retina scaling, then apply Zoom/Pan transform
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.transform(vpt[0], vpt[1], vpt[2], vpt[3], vpt[4], vpt[5])
@@ -54,7 +60,7 @@ export class EraserBrush extends PencilBrush {
     }
   }
 
-  public onMouseUp(options: any) {
+  public onMouseUp(options: Parameters<PencilBrush["onMouseUp"]>[0]) {
     this.isDrawingOnMain = false
     return super.onMouseUp(options)
   }
