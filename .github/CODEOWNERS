@@ -1,0 +1,33 @@
+# Who must review changes to what. GitHub requests these owners automatically
+# on any PR that touches a matching path; pair it with a branch-protection rule
+# requiring code-owner review on master to make it binding.
+#
+# Later rules win over earlier ones, so the specific carve-outs at the bottom
+# override the broad defaults at the top.
+
+# Default: anything without a more specific rule falls to Henderson.
+*                           @Hendo10X
+
+# --- The core. The animation engine and the canvas. ---
+# Every subtle bug in this project has lived here, and none of them failed a
+# build: autosave dropping strokes, fast-stepping merging frames, the brush.
+# These do not go in without Henderson's eyes on them.
+/lib/flipbook/              @Hendo10X
+/components/workshop/       @Hendo10X
+/app/workshop/             @Hendo10X
+/app/api/projects/          @Hendo10X
+
+# The one file the workshop and the marketing site share. Its button sizes are
+# tuned for the dense workshop toolbar, so a well-meant tweak to `lg` silently
+# resizes every tool. Changes here are Henderson's call. See CLAUDE.md.
+/components/ui/button.tsx    @Hendo10X
+
+# Persistence, auth, and the database schema. A migration touches real user
+# data; it does not merge on someone else's say-so.
+/lib/auth.ts                @Hendo10X
+/db/                        @Hendo10X
+
+# Build, deploy, and these ownership rules themselves.
+/next.config.ts             @Hendo10X
+/.github/                   @Hendo10X
+/CLAUDE.md                  @Hendo10X

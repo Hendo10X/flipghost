@@ -1,0 +1,48 @@
+name: CI
+
+# Runs on every PR into master and on every push to master. A green run means
+# the code compiles, passes lint, and builds — the floor for merging, not a
+# guarantee it works. There are no automated tests of the animation engine
+# yet, so a green CI does NOT mean undo, autosave, or export still behave.
+# Those still need a human to open the workshop. See CLAUDE.md.
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+# A newer push to the same branch cancels the older in-flight run rather than
+# paying for both.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          # Pinned to the version used locally so CI and a laptop cannot
+          # disagree about what passes. Bump this and bun.lock together.
+          bun-version: 1.2.19
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      # No secrets are provided on purpose. The build must survive without
+      # them — db/index.ts falls back to a placeholder connection string, and
+      # the Marble pages render their empty state without a key. If a change
+      # makes the build depend on a real secret, it fails here rather than in
+      # production, which is the point.
+      - name: Build
+        run: bun run build
