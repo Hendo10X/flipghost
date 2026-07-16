@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { Canvas, TPointerEventInfo } from "fabric"
+import type { Canvas, TPointerEvent, TPointerEventInfo } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -49,6 +49,36 @@ function OnionLayer({
       className="pointer-events-none absolute inset-0 select-none"
     />
   )
+}
+
+const toHex = (n: number) => n.toString(16).padStart(2, "0")
+
+/**
+ * The colour of the pixel under a pointer event, or null where there is
+ * nothing drawn.
+ *
+ * Reads the rendered canvas rather than hit-testing objects, so it picks up
+ * what you can actually see: the colour where two strokes overlap, or the
+ * softer edge of a pressure stroke, rather than whatever object happens to be
+ * on top. Viewport coordinates go through the retina scale because the backing
+ * store is that many times larger than the CSS box.
+ */
+function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
+  const point = canvas.getViewportPoint(e)
+  const scale = canvas.getRetinaScaling()
+  const x = Math.round(point.x * scale)
+  const y = Math.round(point.y * scale)
+
+  try {
+    const [r, g, b, a] = canvas.getContext().getImageData(x, y, 1, 1).data
+    // Anything faint enough to be more paper than paint is not worth taking.
+    if (a < 16) return null
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+  } catch {
+    // getImageData throws on a tainted canvas. Nothing here is cross-origin,
+    // but a failed sample must not take the workshop down with it.
+    return null
+  }
 }
 
 /**
@@ -178,6 +208,17 @@ export function CanvasStage() {
         }
       }
 
+      // Eyedropper: one click takes the colour under the cursor.
+      canvas.on("mouse:down", (opt) => {
+        if (!canvas || useFlipbook.getState().tool !== "eyedropper") return
+        const color = sampleColorAt(canvas, opt.e)
+        // Bare paper reads as transparent, and "transparent" is not a brush
+        // colour. Clicking an empty patch should do nothing rather than hand
+        // back something invisible to draw with.
+        if (color) useFlipbook.getState().setBrushColor(color)
+        useFlipbook.getState().setTool("brush")
+      })
+
       canvas.on("mouse:down", (opt) => {
         if (useFlipbook.getState().tool !== "eraser") return
         erasing = true
@@ -292,6 +333,14 @@ export function CanvasStage() {
       canvas.isDrawingMode = true
       canvas.selection = false
     } else if (tool === "eraser") {
+      canvas.isDrawingMode = false
+      canvas.selection = false
+      canvas.defaultCursor = "crosshair"
+      canvas.hoverCursor = "crosshair"
+    } else if (tool === "eyedropper") {
+      // Its own branch rather than falling into the select case below, which
+      // would arm a marquee and offer a move cursor for a mode whose whole job
+      // is one click.
       canvas.isDrawingMode = false
       canvas.selection = false
       canvas.defaultCursor = "crosshair"
