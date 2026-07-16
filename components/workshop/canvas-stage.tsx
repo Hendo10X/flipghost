@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { Canvas, TPointerEventInfo } from "fabric"
+import type { Canvas } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -13,6 +13,7 @@ import {
   ZOOM_MAX,
   ZOOM_MIN,
 } from "@/lib/flipbook/store"
+import { EraserBrush } from "@/lib/flipbook/eraser-brush"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -72,6 +73,7 @@ export function CanvasStage() {
   const canvasElRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<Canvas | null>(null)
   const commitRef = useRef<(() => void) | null>(null)
+  const eraserBrushRef = useRef<EraserBrush | null>(null)
   const [ready, setReady] = useState(false)
   const [container, setContainer] = useState({ width: 0, height: 0 })
 
@@ -139,6 +141,7 @@ export function CanvasStage() {
         enablePointerEvents: true,
       })
       canvas.freeDrawingBrush = new PressureBrush(canvas)
+      eraserBrushRef.current = new EraserBrush(canvas)
       fabricRef.current = canvas
 
       const commit = () => {
@@ -164,35 +167,6 @@ export function CanvasStage() {
       // Moving/scaling/rotating with the select tool.
       canvas.on("object:modified", () => commit())
 
-      // Stroke eraser: drag over strokes to remove them.
-      let erasing = false
-      let erasedAny = false
-
-      const tryErase = (opt: TPointerEventInfo) => {
-        if (!canvas) return
-        const { target } = canvas.findTarget(opt.e)
-        if (target) {
-          canvas.remove(target)
-          erasedAny = true
-          canvas.requestRenderAll()
-        }
-      }
-
-      canvas.on("mouse:down", (opt) => {
-        if (useFlipbook.getState().tool !== "eraser") return
-        erasing = true
-        erasedAny = false
-        tryErase(opt)
-      })
-      canvas.on("mouse:move", (opt) => {
-        if (erasing) tryErase(opt)
-      })
-      canvas.on("mouse:up", () => {
-        if (erasing && erasedAny) commit()
-        erasing = false
-        erasedAny = false
-      })
-
       setReady(true)
     }
 
@@ -203,6 +177,7 @@ export function CanvasStage() {
       setReady(false)
       fabricRef.current = null
       commitRef.current = null
+      eraserBrushRef.current = null
       canvas?.dispose()
     }
   }, [])
@@ -288,31 +263,42 @@ export function CanvasStage() {
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
-    if (tool === "brush") {
-      canvas.isDrawingMode = true
-      canvas.selection = false
-    } else if (tool === "eraser") {
-      canvas.isDrawingMode = false
-      canvas.selection = false
-      canvas.defaultCursor = "crosshair"
-      canvas.hoverCursor = "crosshair"
-    } else {
-      canvas.isDrawingMode = false
-      canvas.selection = true
-      canvas.defaultCursor = "default"
-      canvas.hoverCursor = "move"
+
+    async function updateTool() {
+      if (!canvas) return
+      if (tool === "brush") {
+        const { PressureBrush } = await import("@/lib/flipbook/pressure-brush")
+        canvas.isDrawingMode = true
+        canvas.selection = false
+        canvas.freeDrawingBrush = new PressureBrush(canvas)
+        canvas.freeDrawingBrush.color = brushColor
+        canvas.freeDrawingBrush.width = brushSize
+      } else if (tool === "eraser") {
+        canvas.isDrawingMode = true
+        canvas.selection = false
+        const eraser = eraserBrushRef.current
+        if (eraser) {
+          eraser.width = brushSize
+          canvas.freeDrawingBrush = eraser
+        }
+        canvas.freeDrawingCursor = "crosshair"
+      } else {
+        canvas.isDrawingMode = false
+        canvas.selection = true
+        canvas.defaultCursor = "default"
+        canvas.hoverCursor = "move"
+      }
+
+      canvas.forEachObject((obj) => {
+        obj.set({ selectable: tool === "select" })
+      })
+      if (tool !== "select") {
+        canvas.discardActiveObject()
+      }
+      canvas.requestRenderAll()
     }
-    canvas.forEachObject((obj) => {
-      obj.set({ selectable: tool === "select" })
-    })
-    if (tool !== "select") {
-      canvas.discardActiveObject()
-    }
-    canvas.requestRenderAll()
-    if (canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = brushColor
-      canvas.freeDrawingBrush.width = brushSize
-    }
+
+    updateTool()
   }, [tool, brushColor, brushSize, ready])
 
   // --- Brush cursor: a ring matching the stroke it will lay down ---
