@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { Canvas } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -70,10 +70,18 @@ function brushCursor(diameter: number) {
 
 export function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const stageWrapRef = useRef<HTMLDivElement>(null)
   const canvasElRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<Canvas | null>(null)
   const commitRef = useRef<(() => void) | null>(null)
   const eraserBrushRef = useRef<EraserBrush | null>(null)
+  const zoomAnchorRef = useRef<{
+    fracX: number
+    fracY: number
+    clientX: number
+    clientY: number
+  } | null>(null)
+  const zoomAnchorClearRef = useRef<number | null>(null)
   const [ready, setReady] = useState(false)
   const [container, setContainer] = useState({ width: 0, height: 0 })
 
@@ -213,12 +221,66 @@ export function CanvasStage() {
     function onWheel(e: WheelEvent) {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
+
+      // Record where the cursor sits as a fraction of the stage *before* the
+      // zoom changes, so the scroll-correction effect below knows which
+      // point to keep pinned under the cursor.
+      const stageEl = stageWrapRef.current
+      if (stageEl) {
+        const rect = stageEl.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          zoomAnchorRef.current = {
+            fracX: (e.clientX - rect.left) / rect.width,
+            fracY: (e.clientY - rect.top) / rect.height,
+            clientX: e.clientX,
+            clientY: e.clientY,
+          }
+        }
+      }
+
+      // Keep the anchor alive a little past this event: zooming in can make
+      // a scrollbar appear, which shrinks the container and fires the
+      // ResizeObserver as a second, separate resize. Extending the anchor's
+      // lifetime lets every resize in the same burst correct against it.
+      if (zoomAnchorClearRef.current) {
+        window.clearTimeout(zoomAnchorClearRef.current)
+      }
+      zoomAnchorClearRef.current = window.setTimeout(() => {
+        zoomAnchorRef.current = null
+      }, 150)
+
       const state = useFlipbook.getState()
       state.setZoom(state.zoom * Math.exp(-e.deltaY / 300))
     }
     el.addEventListener("wheel", onWheel, { passive: false })
-    return () => el.removeEventListener("wheel", onWheel)
+    return () => {
+      el.removeEventListener("wheel", onWheel)
+      if (zoomAnchorClearRef.current) {
+        window.clearTimeout(zoomAnchorClearRef.current)
+      }
+    }
   }, [])
+
+  // --- Keep the cursor's anchor point fixed after a wheel-zoom resize ---
+  // Runs in the paint-blocking phase so the correction lands in the same
+  // frame as the resize. Note: this only works reliably with the container's
+  // `overflow-anchor: none` below — without it, the browser's own scroll
+  // anchoring re-adjusts scrollLeft/scrollTop right after this runs, undoing
+  // the correction and pulling the stage back toward whatever anchor node
+  // the browser picked (which visually looks like a snap to center).
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current
+    const containerEl = containerRef.current
+    const stageEl = stageWrapRef.current
+    if (!anchor || !containerEl || !stageEl) return
+
+    const rect = stageEl.getBoundingClientRect()
+    const targetClientX = rect.left + anchor.fracX * rect.width
+    const targetClientY = rect.top + anchor.fracY * rect.height
+
+    containerEl.scrollLeft += targetClientX - anchor.clientX
+    containerEl.scrollTop += targetClientY - anchor.clientY
+  }, [displayWidth, displayHeight, container.width, container.height])
 
   // --- Place an imported image onto the current frame ---
   useEffect(() => {
@@ -426,13 +488,17 @@ export function CanvasStage() {
     // min-w-0: without it a flex child refuses to shrink below its content,
     // which would push the stage out past the viewport instead of fitting it.
     <div className="relative flex min-h-0 min-w-0 flex-1">
-      <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto bg-muted/40 [overflow-anchor:none]"
+      >
         {/* Sized to the stage (w-max/h-max) but never smaller than the
             viewport, so centring applies only when there is room to spare.
             Plain justify-center would push the overflow of a zoomed-in stage
             to negative offsets, where scrolling cannot reach it. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
+            ref={stageWrapRef}
             className="relative shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-black/10"
             style={{ width: displayWidth, height: displayHeight }}
           >
