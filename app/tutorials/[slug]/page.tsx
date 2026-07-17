@@ -23,7 +23,8 @@ export async function generateMetadata({
       description: post.description,
       type: "article",
       publishedTime: post.publishedAt,
-      images: post.coverImage ? [post.coverImage] : undefined,
+      // Omitted rather than undefined — see the note in app/blog/[slug].
+      ...(post.coverImage ? { images: [post.coverImage] } : {}),
     },
   }
 }
