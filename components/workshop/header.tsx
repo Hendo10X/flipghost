@@ -12,6 +12,8 @@ import {
   ImageAdd01Icon,
   Loading03Icon,
   Logout01Icon,
+  Motion01Icon,
+  PaintBoardIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -19,10 +21,14 @@ import { saveProjectToCloud } from "@/lib/flipbook/cloud"
 import { clearLocalSnapshot } from "@/lib/flipbook/persistence"
 import {
   downloadBlob,
+  exportApng,
   exportGif,
   exportMp4,
   type ExportFormat,
+  type ExportProgress,
+  type ExportSize,
 } from "@/lib/flipbook/export"
+import type { Frame } from "@/lib/flipbook/store"
 import { getStagePreset, STAGE_PRESETS, useFlipbook } from "@/lib/flipbook/store"
 import { cue } from "@/lib/sound"
 import { signOut, useSession } from "@/lib/auth-client"
@@ -30,17 +36,30 @@ import { Button } from "@/components/ui/button"
 import { HotkeysMenu } from "@/components/workshop/hotkeys-menu"
 import { UserAvatar } from "@/components/user-avatar"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+
+type ExportRunner = (
+  frames: Frame[],
+  fps: number,
+  size: ExportSize,
+  onProgress: (p: ExportProgress) => void
+) => Promise<Blob>
 
 function slugify(title: string) {
   const slug = title
@@ -66,6 +85,10 @@ export function WorkshopHeader() {
     progress: number
   } | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  // Default off so existing behaviour is preserved. The popover explains
+  // per-format semantics ("GIF gets 1-bit, APNG/WebP get soft alpha") so we
+  // don't need a per-format switchboard.
+  const [transparent, setTransparent] = useState(false)
 
   async function handleExport(format: ExportFormat) {
     if (exporting) return
@@ -74,7 +97,18 @@ export function WorkshopHeader() {
     setExporting({ format, progress: 0 })
     setExportError(null)
     try {
-      const run = format === "gif" ? exportGif : exportMp4
+      // GIF honours `transparent` (1-bit). APNG honours it as a soft-fade
+      // key colour rather than 1-bit — the helper does the work frame-by-
+      // frame on the renderer output. MP4 is opaque by spec, so the toggle
+      // is intentionally ignored for that branch.
+      const runners: Record<ExportFormat, ExportRunner> = {
+        gif: (frames, fps, size, onProgress) =>
+          exportGif(frames, fps, size, onProgress, transparent),
+        mp4: exportMp4,
+        apng: (frames, fps, size, onProgress) =>
+          exportApng(frames, fps, size, onProgress, transparent),
+      }
+      const run = runners[format]
       const preset = getStagePreset(state.stagePresetId)
       const blob = await run(
         state.frames,
@@ -86,7 +120,16 @@ export function WorkshopHeader() {
       cue("success")
     } catch (error) {
       console.error(error)
-      setExportError(`${format.toUpperCase()} export failed. Please try again.`)
+      // Surface a real message when we have one — the loader throws an
+      // explanatory Error for CDN failures, and that helps the user tell a
+      // network problem from a code bug. Fall back to a generic line.
+      const detail =
+        error instanceof Error && error.message ? error.message : null
+      setExportError(
+        detail
+          ? `${format.toUpperCase()} export failed: ${detail}`
+          : `${format.toUpperCase()} export failed. Please try again.`
+      )
     } finally {
       setExporting(null)
     }
@@ -286,6 +329,53 @@ export function WorkshopHeader() {
 
         <div className="h-4 w-px bg-border" />
 
+        <Popover>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      aria-label="Export options"
+                      aria-pressed={transparent}
+                    >
+                      <HugeiconsIcon
+                        icon={PaintBoardIcon}
+                        strokeWidth={1.8}
+                      />
+                      <span className="hidden lg:inline">Export</span>
+                    </Button>
+                  }
+                />
+              }
+            />
+            <TooltipContent side="bottom">Export options</TooltipContent>
+          </Tooltip>
+          <PopoverContent side="bottom" align="end" className="w-72">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium">
+                    Transparent background
+                  </span>
+                  <span className="text-[0.6875rem] text-muted-foreground">
+                    Removes the white paper. APNG keeps soft alpha, GIF is
+                    1-bit, MP4 stays opaque.
+                  </span>
+                </div>
+                <Switch
+                  checked={transparent}
+                  onCheckedChange={(value) => setTransparent(value)}
+                  aria-label="Transparent background"
+                  disabled={exporting !== null}
+                />
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+
         <Tooltip>
           <TooltipTrigger
             render={
@@ -349,6 +439,38 @@ export function WorkshopHeader() {
             }
           />
           <TooltipContent side="bottom">Export an MP4 video</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="outline"
+                size="lg"
+                disabled={exporting !== null}
+                onClick={() => handleExport("apng")}
+                aria-label="Export APNG"
+              >
+                {exporting?.format === "apng" ? (
+                  <>
+                    <HugeiconsIcon
+                      icon={Loading03Icon}
+                      className="animate-spin"
+                      strokeWidth={1.8}
+                    />
+                    <span className="tabular-nums">
+                      {Math.round(exporting.progress * 100)}%
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <HugeiconsIcon icon={Motion01Icon} strokeWidth={1.8} />
+                    <span className="hidden lg:inline">APNG</span>
+                  </>
+                )}
+              </Button>
+            }
+          />
+          <TooltipContent side="bottom">Export a transparent APNG</TooltipContent>
         </Tooltip>
 
         <div className="h-4 w-px bg-border" />
