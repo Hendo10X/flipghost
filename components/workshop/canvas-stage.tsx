@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import type { Canvas, TPointerEvent, TPointerEventInfo } from "fabric"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import type { Canvas } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -13,6 +13,7 @@ import {
   ZOOM_MAX,
   ZOOM_MIN,
 } from "@/lib/flipbook/store"
+import { EraserBrush } from "@/lib/flipbook/eraser-brush"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -51,36 +52,6 @@ function OnionLayer({
   )
 }
 
-const toHex = (n: number) => n.toString(16).padStart(2, "0")
-
-/**
- * The colour of the pixel under a pointer event, or null where there is
- * nothing drawn.
- *
- * Reads the rendered canvas rather than hit-testing objects, so it picks up
- * what you can actually see: the colour where two strokes overlap, or the
- * softer edge of a pressure stroke, rather than whatever object happens to be
- * on top. Viewport coordinates go through the retina scale because the backing
- * store is that many times larger than the CSS box.
- */
-function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
-  const point = canvas.getViewportPoint(e)
-  const scale = canvas.getRetinaScaling()
-  const x = Math.round(point.x * scale)
-  const y = Math.round(point.y * scale)
-
-  try {
-    const [r, g, b, a] = canvas.getContext().getImageData(x, y, 1, 1).data
-    // Anything faint enough to be more paper than paint is not worth taking.
-    if (a < 16) return null
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`
-  } catch {
-    // getImageData throws on a tainted canvas. Nothing here is cross-origin,
-    // but a failed sample must not take the workshop down with it.
-    return null
-  }
-}
-
 /**
  * A ring the size of the brush, drawn white over black so it stays visible on
  * both bare paper and dark strokes. Sized in screen pixels, so it tracks zoom.
@@ -99,9 +70,18 @@ function brushCursor(diameter: number) {
 
 export function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null)
+  const stageWrapRef = useRef<HTMLDivElement>(null)
   const canvasElRef = useRef<HTMLCanvasElement>(null)
   const fabricRef = useRef<Canvas | null>(null)
   const commitRef = useRef<(() => void) | null>(null)
+  const eraserBrushRef = useRef<EraserBrush | null>(null)
+  const zoomAnchorRef = useRef<{
+    fracX: number
+    fracY: number
+    clientX: number
+    clientY: number
+  } | null>(null)
+  const zoomAnchorClearRef = useRef<number | null>(null)
   const [ready, setReady] = useState(false)
   const [container, setContainer] = useState({ width: 0, height: 0 })
 
@@ -169,6 +149,7 @@ export function CanvasStage() {
         enablePointerEvents: true,
       })
       canvas.freeDrawingBrush = new PressureBrush(canvas)
+      eraserBrushRef.current = new EraserBrush(canvas)
       fabricRef.current = canvas
 
       const commit = () => {
@@ -194,46 +175,6 @@ export function CanvasStage() {
       // Moving/scaling/rotating with the select tool.
       canvas.on("object:modified", () => commit())
 
-      // Stroke eraser: drag over strokes to remove them.
-      let erasing = false
-      let erasedAny = false
-
-      const tryErase = (opt: TPointerEventInfo) => {
-        if (!canvas) return
-        const { target } = canvas.findTarget(opt.e)
-        if (target) {
-          canvas.remove(target)
-          erasedAny = true
-          canvas.requestRenderAll()
-        }
-      }
-
-      // Eyedropper: one click takes the colour under the cursor.
-      canvas.on("mouse:down", (opt) => {
-        if (!canvas || useFlipbook.getState().tool !== "eyedropper") return
-        const color = sampleColorAt(canvas, opt.e)
-        // Bare paper reads as transparent, and "transparent" is not a brush
-        // colour. Clicking an empty patch should do nothing rather than hand
-        // back something invisible to draw with.
-        if (color) useFlipbook.getState().setBrushColor(color)
-        useFlipbook.getState().setTool("brush")
-      })
-
-      canvas.on("mouse:down", (opt) => {
-        if (useFlipbook.getState().tool !== "eraser") return
-        erasing = true
-        erasedAny = false
-        tryErase(opt)
-      })
-      canvas.on("mouse:move", (opt) => {
-        if (erasing) tryErase(opt)
-      })
-      canvas.on("mouse:up", () => {
-        if (erasing && erasedAny) commit()
-        erasing = false
-        erasedAny = false
-      })
-
       setReady(true)
     }
 
@@ -244,6 +185,7 @@ export function CanvasStage() {
       setReady(false)
       fabricRef.current = null
       commitRef.current = null
+      eraserBrushRef.current = null
       canvas?.dispose()
     }
   }, [])
@@ -279,12 +221,66 @@ export function CanvasStage() {
     function onWheel(e: WheelEvent) {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
+
+      // Record where the cursor sits as a fraction of the stage *before* the
+      // zoom changes, so the scroll-correction effect below knows which
+      // point to keep pinned under the cursor.
+      const stageEl = stageWrapRef.current
+      if (stageEl) {
+        const rect = stageEl.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          zoomAnchorRef.current = {
+            fracX: (e.clientX - rect.left) / rect.width,
+            fracY: (e.clientY - rect.top) / rect.height,
+            clientX: e.clientX,
+            clientY: e.clientY,
+          }
+        }
+      }
+
+      // Keep the anchor alive a little past this event: zooming in can make
+      // a scrollbar appear, which shrinks the container and fires the
+      // ResizeObserver as a second, separate resize. Extending the anchor's
+      // lifetime lets every resize in the same burst correct against it.
+      if (zoomAnchorClearRef.current) {
+        window.clearTimeout(zoomAnchorClearRef.current)
+      }
+      zoomAnchorClearRef.current = window.setTimeout(() => {
+        zoomAnchorRef.current = null
+      }, 150)
+
       const state = useFlipbook.getState()
       state.setZoom(state.zoom * Math.exp(-e.deltaY / 300))
     }
     el.addEventListener("wheel", onWheel, { passive: false })
-    return () => el.removeEventListener("wheel", onWheel)
+    return () => {
+      el.removeEventListener("wheel", onWheel)
+      if (zoomAnchorClearRef.current) {
+        window.clearTimeout(zoomAnchorClearRef.current)
+      }
+    }
   }, [])
+
+  // --- Keep the cursor's anchor point fixed after a wheel-zoom resize ---
+  // Runs in the paint-blocking phase so the correction lands in the same
+  // frame as the resize. Note: this only works reliably with the container's
+  // `overflow-anchor: none` below — without it, the browser's own scroll
+  // anchoring re-adjusts scrollLeft/scrollTop right after this runs, undoing
+  // the correction and pulling the stage back toward whatever anchor node
+  // the browser picked (which visually looks like a snap to center).
+  useLayoutEffect(() => {
+    const anchor = zoomAnchorRef.current
+    const containerEl = containerRef.current
+    const stageEl = stageWrapRef.current
+    if (!anchor || !containerEl || !stageEl) return
+
+    const rect = stageEl.getBoundingClientRect()
+    const targetClientX = rect.left + anchor.fracX * rect.width
+    const targetClientY = rect.top + anchor.fracY * rect.height
+
+    containerEl.scrollLeft += targetClientX - anchor.clientX
+    containerEl.scrollTop += targetClientY - anchor.clientY
+  }, [displayWidth, displayHeight, container.width, container.height])
 
   // --- Place an imported image onto the current frame ---
   useEffect(() => {
@@ -329,39 +325,42 @@ export function CanvasStage() {
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
-    if (tool === "brush") {
-      canvas.isDrawingMode = true
-      canvas.selection = false
-    } else if (tool === "eraser") {
-      canvas.isDrawingMode = false
-      canvas.selection = false
-      canvas.defaultCursor = "crosshair"
-      canvas.hoverCursor = "crosshair"
-    } else if (tool === "eyedropper") {
-      // Its own branch rather than falling into the select case below, which
-      // would arm a marquee and offer a move cursor for a mode whose whole job
-      // is one click.
-      canvas.isDrawingMode = false
-      canvas.selection = false
-      canvas.defaultCursor = "crosshair"
-      canvas.hoverCursor = "crosshair"
-    } else {
-      canvas.isDrawingMode = false
-      canvas.selection = true
-      canvas.defaultCursor = "default"
-      canvas.hoverCursor = "move"
+
+    async function updateTool() {
+      if (!canvas) return
+      if (tool === "brush") {
+        const { PressureBrush } = await import("@/lib/flipbook/pressure-brush")
+        canvas.isDrawingMode = true
+        canvas.selection = false
+        canvas.freeDrawingBrush = new PressureBrush(canvas)
+        canvas.freeDrawingBrush.color = brushColor
+        canvas.freeDrawingBrush.width = brushSize
+      } else if (tool === "eraser") {
+        canvas.isDrawingMode = true
+        canvas.selection = false
+        const eraser = eraserBrushRef.current
+        if (eraser) {
+          eraser.width = brushSize
+          canvas.freeDrawingBrush = eraser
+        }
+        canvas.freeDrawingCursor = "crosshair"
+      } else {
+        canvas.isDrawingMode = false
+        canvas.selection = true
+        canvas.defaultCursor = "default"
+        canvas.hoverCursor = "move"
+      }
+
+      canvas.forEachObject((obj) => {
+        obj.set({ selectable: tool === "select" })
+      })
+      if (tool !== "select") {
+        canvas.discardActiveObject()
+      }
+      canvas.requestRenderAll()
     }
-    canvas.forEachObject((obj) => {
-      obj.set({ selectable: tool === "select" })
-    })
-    if (tool !== "select") {
-      canvas.discardActiveObject()
-    }
-    canvas.requestRenderAll()
-    if (canvas.freeDrawingBrush) {
-      canvas.freeDrawingBrush.color = brushColor
-      canvas.freeDrawingBrush.width = brushSize
-    }
+
+    updateTool()
   }, [tool, brushColor, brushSize, ready])
 
   // --- Brush cursor: a ring matching the stroke it will lay down ---
@@ -489,13 +488,17 @@ export function CanvasStage() {
     // min-w-0: without it a flex child refuses to shrink below its content,
     // which would push the stage out past the viewport instead of fitting it.
     <div className="relative flex min-h-0 min-w-0 flex-1">
-      <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto bg-muted/40 [overflow-anchor:none]"
+      >
         {/* Sized to the stage (w-max/h-max) but never smaller than the
             viewport, so centring applies only when there is room to spare.
             Plain justify-center would push the overflow of a zoomed-in stage
             to negative offsets, where scrolling cannot reach it. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
+            ref={stageWrapRef}
             className="relative shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-black/10"
             style={{ width: displayWidth, height: displayHeight }}
           >
