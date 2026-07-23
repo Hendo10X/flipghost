@@ -189,11 +189,12 @@ export function Timeline() {
   const viewportRef = useRef<HTMLDivElement>(null)
   const [viewLayerIndex, setViewLayerIndex] = useState(0)
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => {
     if (viewLayerIndex > layers.length - 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setViewLayerIndex(Math.max(0, layers.length - 1))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers.length])
 
   const goToLayer = (index: number) => {
