@@ -193,6 +193,7 @@ export function Timeline() {
     if (viewLayerIndex > layers.length - 1) {
       setViewLayerIndex(Math.max(0, layers.length - 1))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [layers.length])
 
   const goToLayer = (index: number) => {
