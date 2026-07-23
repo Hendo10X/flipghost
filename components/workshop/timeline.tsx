@@ -5,6 +5,8 @@ import {
   ArrowDown01Icon,
   Copy01Icon,
   Delete02Icon,
+  EyeIcon,
+  EyeOffIcon,
   GhostIcon,
   PauseIcon,
   PlayIcon,
@@ -29,6 +31,11 @@ import {
 } from "@/components/ui/tooltip"
 
 const ONION_COUNTS = Array.from({ length: ONION_MAX + 1 }, (_, i) => i)
+
+// One layer row is exactly this tall, and the viewport below is clamped to
+// the same height, so only a single layer is ever visible — scrolling (wheel
+// or the up/down buttons) snaps to the next/previous one.
+const ROW_HEIGHT = 52
 
 /** Popover for how many frames to ghost on each side, and how strongly. */
 function OnionSettings() {
@@ -144,9 +151,17 @@ function OnionSettings() {
 }
 
 export function Timeline() {
-  const frames = useFlipbook((s) => s.frames)
-  const currentId = useFlipbook((s) => s.currentId)
+  const layers = useFlipbook((s) => s.layers)
+  const currentLayerId = useFlipbook((s) => s.currentLayerId)
+  const currentFrameIndex = useFlipbook((s) => s.currentFrameIndex)
+  const selectLayer = useFlipbook((s) => s.selectLayer)
   const selectFrame = useFlipbook((s) => s.selectFrame)
+  const setLayerName = useFlipbook((s) => s.setLayerName)
+  const toggleLayerVisibility = useFlipbook((s) => s.toggleLayerVisibility)
+  const addLayer = useFlipbook((s) => s.addLayer)
+  const duplicateLayer = useFlipbook((s) => s.duplicateLayer)
+  const deleteLayer = useFlipbook((s) => s.deleteLayer)
+  const reorderLayers = useFlipbook((s) => s.reorderLayers)
   const addFrame = useFlipbook((s) => s.addFrame)
   const duplicateFrame = useFlipbook((s) => s.duplicateFrame)
   const deleteFrame = useFlipbook((s) => s.deleteFrame)
@@ -158,28 +173,59 @@ export function Timeline() {
   const onionSkin = useFlipbook((s) => s.onionSkin)
   const toggleOnionSkin = useFlipbook((s) => s.toggleOnionSkin)
 
-  const currentIndex = frames.findIndex((f) => f.id === currentId)
-  const dragIndex = useRef<number | null>(null)
-  const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const frameCount = layers[0]?.frames.length ?? 0
+  const dragFrameIndex = useRef<number | null>(null)
+  const [dropFrameIndex, setDropFrameIndex] = useState<number | null>(null)
+  const [draggingFrameIndex, setDraggingFrameIndex] = useState<number | null>(
+    null
+  )
+  const [hoverColumn, setHoverColumn] = useState<number | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const reducedMotion = usePrefersReducedMotion()
+
+  // Single-layer viewport: only one layer row is visible at a time, and the
+  // rest are reached by scrolling (wheel, or the up/down buttons), which
+  // snaps one row at a time.
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const [viewLayerIndex, setViewLayerIndex] = useState(0)
+
+  useEffect(() => {
+    if (viewLayerIndex > layers.length - 1) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setViewLayerIndex(Math.max(0, layers.length - 1))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layers.length])
+
+  const goToLayer = (index: number) => {
+    const clamped = Math.min(Math.max(index, 0), layers.length - 1)
+    viewportRef.current?.scrollTo({
+      top: clamped * ROW_HEIGHT,
+      behavior: reducedMotion ? "auto" : "smooth",
+    })
+    setViewLayerIndex(clamped)
+  }
 
   // Stepping frames with the hotkeys moves the selection, which would
   // otherwise walk straight off the end of the strip and out of sight.
   useEffect(() => {
-    const el = stripRef.current?.querySelector(`[data-frame-id="${currentId}"]`)
-    el?.scrollIntoView({
+    const el =
+      stripRef.current?.querySelector(
+        `[data-cell-id="${currentLayerId}-${currentFrameIndex}"]`
+      ) ??
+      stripRef.current?.querySelector(
+        `[data-frame-index="${currentFrameIndex}"]`
+      )
+    ;(el as HTMLElement | null)?.scrollIntoView({
       behavior: reducedMotion ? "auto" : "smooth",
       block: "nearest",
       inline: "nearest",
     })
-  }, [currentId, reducedMotion])
+  }, [currentLayerId, currentFrameIndex, reducedMotion])
 
   return (
-    <div className="flex flex-col gap-2 border-t px-4 py-3">
-      {/* Height and a floor on width, rather than a square: the onion skin
-          toggle carries a label and must stay its natural width. */}
-      <div className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11 max-lg:[&_[data-slot=button]]:h-11 max-lg:[&_[data-slot=button]]:min-w-11">
+    <section className="border-t bg-background/95 px-4 py-3 shadow-[0_-1px_0_hsl(var(--border))] backdrop-blur">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card/80 px-3 py-2">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -201,17 +247,13 @@ export function Timeline() {
           </TooltipContent>
         </Tooltip>
 
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {currentIndex + 1} / {frames.length}
+        <span className="rounded-md border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground tabular-nums">
+          {currentFrameIndex + 1} / {frameCount}
         </span>
 
-        <div className="mx-1 h-4 w-px bg-border" />
+        <div className="h-4 w-px bg-border" />
 
-        <div
-          role="radiogroup"
-          aria-label="Frames per second"
-          className="flex items-center gap-0.5 rounded-md bg-muted p-0.5"
-        >
+        <div className="flex items-center gap-1 rounded-md border bg-muted/40 p-1">
           {FPS_OPTIONS.map((option) => (
             <button
               key={option}
@@ -220,19 +262,17 @@ export function Timeline() {
               aria-checked={fps === option}
               onClick={() => setFps(option)}
               className={cn(
-                "rounded-[5px] px-2 py-0.5 text-xs tabular-nums transition-colors select-none pointer-coarse:px-3 pointer-coarse:py-2 max-lg:px-3 max-lg:py-2",
+                "rounded-sm px-2.5 py-1 text-xs tabular-nums transition-colors select-none pointer-coarse:px-3 pointer-coarse:py-2 max-lg:px-3 max-lg:py-2",
                 fps === option
-                  ? "bg-background text-foreground shadow-xs"
+                  ? "bg-background text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               {option}
             </button>
           ))}
+          <span className="pr-2 text-xs text-muted-foreground">fps</span>
         </div>
-        <span className="text-xs text-muted-foreground">fps</span>
-
-        <div className="mx-1 h-4 w-px bg-border" />
 
         <Tooltip>
           <TooltipTrigger
@@ -244,7 +284,7 @@ export function Timeline() {
                 data-cuelume-toggle
                 onClick={toggleOnionSkin}
                 className={cn(
-                  "text-muted-foreground",
+                  "rounded-md text-muted-foreground transition-colors",
                   onionSkin && "bg-muted text-foreground"
                 )}
               >
@@ -261,6 +301,22 @@ export function Timeline() {
         <OnionSettings />
 
         <div className="ml-auto flex items-center gap-1">
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="Add layer"
+                  onClick={addLayer}
+                  className="text-muted-foreground"
+                >
+                  <HugeiconsIcon icon={PlusSignIcon} strokeWidth={1.8} />
+                </Button>
+              }
+            />
+            <TooltipContent>Add layer</TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -296,77 +352,373 @@ export function Timeline() {
         </div>
       </div>
 
-      <div ref={stripRef} className="flex items-center gap-2 overflow-x-auto pt-1 pb-1">
-        {frames.map((frame, index) => (
-          <button
-            key={frame.id}
-            type="button"
-            data-frame-id={frame.id}
-            draggable
-            onDragStart={() => {
-              dragIndex.current = index
-            }}
-            onDragOver={(e) => {
-              e.preventDefault()
-              if (dragIndex.current !== null && dragIndex.current !== index) {
-                setDropIndex(index)
-              }
-            }}
-            onDragLeave={() => setDropIndex((d) => (d === index ? null : d))}
-            onDrop={(e) => {
-              e.preventDefault()
-              if (dragIndex.current !== null) {
-                reorderFrames(dragIndex.current, index)
-              }
-              dragIndex.current = null
-              setDropIndex(null)
-            }}
-            onDragEnd={() => {
-              dragIndex.current = null
-              setDropIndex(null)
-            }}
-            onClick={() => selectFrame(frame.id)}
-            aria-label={`Frame ${index + 1}`}
-            aria-current={frame.id === currentId ? "true" : undefined}
-            className={cn(
-              "relative size-16 shrink-0 cursor-grab overflow-hidden rounded-lg bg-white ring-1 ring-black/10 transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing dark:ring-white/15",
-              frame.id === currentId && "ring-2 ring-primary dark:ring-primary",
-              dropIndex === index && "ring-2 ring-ring"
-            )}
-          >
-            {frame.dataUrl && (
-              // eslint-disable-next-line @next/next/no-img-element -- data URL, not optimizable
-              <img
-                src={frame.dataUrl}
-                alt=""
-                draggable={false}
-                className="size-full object-contain select-none"
-              />
-            )}
-            <span className="absolute bottom-0.5 left-1.5 text-[10px] font-medium text-black/40 select-none">
-              {index + 1}
+      <div className="mt-3 overflow-hidden rounded-lg border bg-card/70">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-2">
+          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <span>Layers</span>
+            <span className="rounded-md border bg-background px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              standard timeline
             </span>
-          </button>
-        ))}
+          </div>
 
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="outline"
-                aria-label="Add frame"
-                data-cuelume-press
-                data-cuelume-release
-                onClick={addFrame}
-                className="size-16 shrink-0 rounded-lg border-dashed text-muted-foreground"
-              >
-                <HugeiconsIcon icon={PlusSignIcon} strokeWidth={1.8} />
-              </Button>
-            }
-          />
-          <TooltipContent>Add a blank frame</TooltipContent>
-        </Tooltip>
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              Layer {layers.length === 0 ? 0 : viewLayerIndex + 1} of{" "}
+              {layers.length}
+            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Previous layer"
+                    disabled={viewLayerIndex <= 0}
+                    onClick={() => goToLayer(viewLayerIndex - 1)}
+                    className="rotate-180 text-muted-foreground"
+                  >
+                    <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+                  </Button>
+                }
+              />
+              <TooltipContent>Previous layer</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Next layer"
+                    disabled={viewLayerIndex >= layers.length - 1}
+                    onClick={() => goToLayer(viewLayerIndex + 1)}
+                    className="text-muted-foreground"
+                  >
+                    <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+                  </Button>
+                }
+              />
+              <TooltipContent>Next layer</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div ref={stripRef} className="relative overflow-x-auto">
+          <div className="min-w-max">
+            {/* Frame ruler — shared across every layer, always visible */}
+            <div className="flex items-stretch border-b bg-background/95">
+              <div className="flex w-72 shrink-0 items-center gap-2 border-r border-border/60 px-4 py-2.5">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Frames
+                </span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2.5">
+                {Array.from({ length: frameCount }, (_, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    draggable
+                    data-frame-index={index}
+                    onDragStart={() => {
+                      dragFrameIndex.current = index
+                      setDraggingFrameIndex(index)
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      if (
+                        dragFrameIndex.current !== null &&
+                        dragFrameIndex.current !== index
+                      ) {
+                        setDropFrameIndex(index)
+                      }
+                    }}
+                    onDragLeave={() =>
+                      setDropFrameIndex((d) => (d === index ? null : d))
+                    }
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      if (dragFrameIndex.current !== null) {
+                        reorderFrames(dragFrameIndex.current, index)
+                      }
+                      dragFrameIndex.current = null
+                      setDropFrameIndex(null)
+                      setDraggingFrameIndex(null)
+                    }}
+                    onDragEnd={() => {
+                      dragFrameIndex.current = null
+                      setDropFrameIndex(null)
+                      setDraggingFrameIndex(null)
+                    }}
+                    onMouseEnter={() => setHoverColumn(index)}
+                    onMouseLeave={() => setHoverColumn(null)}
+                    onClick={() => selectFrame(index)}
+                    aria-label={`Frame ${index + 1}`}
+                    className={cn(
+                      "relative h-9 w-16 shrink-0 border border-border/70 bg-muted/30 text-xs font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      currentFrameIndex === index &&
+                        "border-primary bg-primary/5 text-foreground",
+                      dropFrameIndex === index && "border-ring",
+                      draggingFrameIndex === index && "opacity-40",
+                      hoverColumn === index &&
+                        draggingFrameIndex === null &&
+                        currentFrameIndex !== index &&
+                        "border-foreground/40"
+                    )}
+                  >
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      {index + 1}
+                    </span>
+                  </button>
+                ))}
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        aria-label="Add frame"
+                        data-cuelume-press
+                        data-cuelume-release
+                        onClick={addFrame}
+                        className="h-9 w-16 shrink-0 border-dashed text-muted-foreground"
+                      >
+                        <HugeiconsIcon icon={PlusSignIcon} strokeWidth={1.8} />
+                      </Button>
+                    }
+                  />
+                  <TooltipContent>Add a blank frame</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+
+            {/* Exactly one layer's row is visible here; scrolling (wheel or
+                the up/down buttons above) snaps to the next/previous one. */}
+            <div
+              ref={viewportRef}
+              style={{ height: ROW_HEIGHT, scrollSnapType: "y mandatory" }}
+              className="overflow-y-auto"
+              onScroll={(e) => {
+                const idx = Math.round(
+                  e.currentTarget.scrollTop / ROW_HEIGHT
+                )
+                setViewLayerIndex(
+                  Math.min(Math.max(idx, 0), layers.length - 1)
+                )
+              }}
+            >
+              {layers.map((layer, layerIndex) => {
+                const active = layer.id === currentLayerId
+                return (
+                  <div
+                    key={layer.id}
+                    style={{ height: ROW_HEIGHT, scrollSnapAlign: "start" }}
+                    className={cn(
+                      "flex items-stretch border-b border-border/60 last:border-b-0",
+                      active && "bg-muted/40"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex w-72 shrink-0 items-center gap-1.5 border-r border-border/60 bg-card/95 px-2.5",
+                        active && "bg-muted/60"
+                      )}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={
+                                layer.visible ? "Hide layer" : "Show layer"
+                              }
+                              aria-pressed={layer.visible}
+                              onClick={() => toggleLayerVisibility(layer.id)}
+                              className="text-muted-foreground"
+                            >
+                              <HugeiconsIcon
+                                icon={layer.visible ? EyeIcon : EyeOffIcon}
+                                strokeWidth={1.8}
+                              />
+                            </Button>
+                          }
+                        />
+                        <TooltipContent side="bottom">
+                          {layer.visible ? "Hide layer" : "Show layer"}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <input
+                        value={layer.name || `Layer ${layerIndex + 1}`}
+                        onChange={(e) => setLayerName(layer.id, e.target.value)}
+                        aria-label={`Layer name ${layerIndex + 1}`}
+                        spellCheck={false}
+                        className="min-w-0 flex-1 border border-transparent bg-transparent px-2 py-1 text-sm font-medium outline-none placeholder:text-muted-foreground focus:border-border focus:bg-background"
+                      />
+
+                      <div className="flex items-center gap-0.5">
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Move layer up"
+                                disabled={layerIndex === 0}
+                                onClick={() =>
+                                  reorderLayers(layerIndex, layerIndex - 1)
+                                }
+                                className="rotate-180 text-muted-foreground"
+                              >
+                                <HugeiconsIcon
+                                  icon={ArrowDown01Icon}
+                                  strokeWidth={2}
+                                />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent side="bottom">
+                            Move layer up
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Move layer down"
+                                disabled={layerIndex === layers.length - 1}
+                                onClick={() =>
+                                  reorderLayers(layerIndex, layerIndex + 1)
+                                }
+                                className="text-muted-foreground"
+                              >
+                                <HugeiconsIcon
+                                  icon={ArrowDown01Icon}
+                                  strokeWidth={2}
+                                />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent side="bottom">
+                            Move layer down
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Duplicate layer"
+                                onClick={() => {
+                                  selectLayer(layer.id)
+                                  duplicateLayer()
+                                  const state = useFlipbook.getState()
+                                  const newLayerId = state.currentLayerId
+                                  const newIndex = state.layers.findIndex(
+                                    (l) => l.id === newLayerId
+                                  )
+                                  if (newLayerId && newIndex !== -1) {
+                                    setLayerName(
+                                      newLayerId,
+                                      `Layer ${newIndex + 1}`
+                                    )
+                                  }
+                                }}
+                                className="text-muted-foreground"
+                              >
+                                <HugeiconsIcon
+                                  icon={Copy01Icon}
+                                  strokeWidth={1.8}
+                                />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent side="bottom">
+                            Duplicate layer
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Delete layer"
+                                onClick={() => {
+                                  selectLayer(layer.id)
+                                  deleteLayer()
+                                }}
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <HugeiconsIcon
+                                  icon={Delete02Icon}
+                                  strokeWidth={1.8}
+                                />
+                              </Button>
+                            }
+                          />
+                          <TooltipContent side="bottom">
+                            Delete layer
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 px-4">
+                      {layer.frames.map((frame, frameIndex) => (
+                        <button
+                          key={frame.id}
+                          type="button"
+                          data-cell-id={`${layer.id}-${frameIndex}`}
+                          onClick={() => {
+                            selectLayer(layer.id)
+                            selectFrame(frameIndex)
+                          }}
+                          onMouseEnter={() => setHoverColumn(frameIndex)}
+                          onMouseLeave={() => setHoverColumn(null)}
+                          aria-label={`${layer.name || `Layer ${layerIndex + 1}`}, frame ${frameIndex + 1}`}
+                          aria-current={
+                            active && frameIndex === currentFrameIndex
+                              ? "true"
+                              : undefined
+                          }
+                          className={cn(
+                            "relative h-9 w-16 shrink-0 cursor-pointer border border-border/70 bg-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active &&
+                              frameIndex === currentFrameIndex &&
+                              "border-primary",
+                            !layer.visible && "opacity-40",
+                            draggingFrameIndex === frameIndex && "opacity-40",
+                            hoverColumn === frameIndex &&
+                              draggingFrameIndex === null &&
+                              !(active && frameIndex === currentFrameIndex) &&
+                              "border-foreground/40"
+                          )}
+                        >
+                          {frame.dataUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element -- data URL, not optimizable
+                            <img
+                              src={frame.dataUrl}
+                              alt=""
+                              draggable={false}
+                              className="size-full object-contain select-none"
+                            />
+                          )}
+                          <span className="absolute bottom-0.5 left-1.5 text-[10px] font-medium text-black/40 select-none">
+                            {frameIndex + 1}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
   )
 }

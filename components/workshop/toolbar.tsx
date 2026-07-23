@@ -40,6 +40,48 @@ const TOOLS: { tool: Tool; label: string; icon: typeof PencilEdit02Icon }[] = [
 ]
 
 /**
+ * Auto-draw shape tools: drag to place a perfect square/circle rather than a
+ * freehand stroke. Kept as plain inline glyphs instead of hugeicons imports —
+ * this package's free set doesn't reliably ship a bare square/circle outline
+ * across versions, and a wrong import name fails at build time rather than
+ * render time. NOTE: "square" and "circle" need to be added to the `Tool`
+ * union in lib/flipbook/store.ts, and the canvas component that owns pointer
+ * drawing needs to handle them by drawing a rect/ellipse from drag-start to
+ * drag-end instead of a freehand path.
+ */
+const SHAPE_TOOLS: { tool: "square" | "circle"; label: string; glyph: "square" | "circle" }[] = [
+  { tool: "square", label: "Square (auto-draw)", glyph: "square" },
+  { tool: "circle", label: "Circle (auto-draw)", glyph: "circle" },
+]
+
+function ShapeGlyph({
+  shape,
+  className,
+}: {
+  shape: "square" | "circle"
+  className?: string
+}) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      {shape === "square" ? (
+        <rect x="4.5" y="4.5" width="15" height="15" rx="1.5" />
+      ) : (
+        <circle cx="12" cy="12" r="7.5" />
+      )}
+    </svg>
+  )
+}
+
+/**
  * Ten presets, because dragging a saturation square to find plain red is a
  * silly way to spend a second you could have spent drawing. Fixed rather than
  * editable: a palette the user can add to is a palette they expect to still be
@@ -205,6 +247,33 @@ export function Toolbar() {
           <TooltipContent side="right">{label}</TooltipContent>
         </Tooltip>
       ))}
+
+      {SHAPE_TOOLS.map(({ tool: t, label, glyph }) => {
+        const shapeTool = t as Tool
+        return (
+          <Tooltip key={t}>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label={label}
+                  aria-pressed={shapeTool === tool}
+                  data-cuelume-toggle
+                  onClick={() => setTool(shapeTool)}
+                  className={cn(
+                    "text-muted-foreground",
+                    shapeTool === tool && "bg-muted text-foreground"
+                  )}
+                >
+                  <ShapeGlyph shape={glyph} className="size-5" />
+                </Button>
+              }
+            />
+            <TooltipContent side="right">{label}</TooltipContent>
+          </Tooltip>
+        )
+      })}
 
       <div className="my-2 h-px w-6 bg-border" />
 

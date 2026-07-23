@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useRef, useState } from "react"
 import Link from "next/link"
@@ -77,7 +77,7 @@ export function WorkshopHeader() {
       const run = format === "gif" ? exportGif : exportMp4
       const preset = getStagePreset(state.stagePresetId)
       const blob = await run(
-        state.frames,
+        state,
         state.fps,
         { width: preset.width, height: preset.height },
         (p) => setExporting({ format, progress: p.value })
@@ -98,13 +98,7 @@ export function WorkshopHeader() {
     state.setCloudStatus("saving")
     try {
       const wasScratch = state.projectId === null
-      const { id } = await saveProjectToCloud({
-        projectId: state.projectId,
-        title: state.title,
-        fps: state.fps,
-        stagePresetId: state.stagePresetId,
-        frames: state.frames,
-      })
+      const { id } = await saveProjectToCloud(state)
       state.setProjectId(id)
       useFlipbook.getState().setCloudStatus("saved")
       // Keep the URL shareable across refreshes without remounting the page.

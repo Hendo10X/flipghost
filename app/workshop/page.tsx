@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+﻿import type { Metadata } from "next"
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { and, asc, eq } from "drizzle-orm"
@@ -7,7 +7,12 @@ import { db } from "@/db"
 import { frames, projects } from "@/db/schema"
 import { auth } from "@/lib/auth"
 import { getDemo } from "@/lib/flipbook/demos"
-import { getStagePreset, type FrameJSON } from "@/lib/flipbook/store"
+import {
+  normalizeProjectSnapshot,
+  getStagePreset,
+  type FrameJSON,
+  type ProjectSnapshot,
+} from "@/lib/flipbook/store"
 import { Editor, type InitialProject } from "@/components/workshop/editor"
 
 export const metadata: Metadata = {
@@ -22,6 +27,15 @@ function parseFrameJson(raw: string | null): FrameJSON | null {
   } catch {
     return null
   }
+}
+
+function isLayeredSnapshot(value: unknown): value is ProjectSnapshot {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    Array.isArray((value as { layers?: unknown }).layers) &&
+    typeof (value as { currentLayerId?: unknown }).currentLayerId === "string"
+  )
 }
 
 /**
@@ -46,16 +60,43 @@ async function loadProject(
     .where(eq(frames.projectId, id))
     .orderBy(asc(frames.orderIndex))
 
-  return {
-    id: project.id,
-    title: project.title,
-    fps: project.fps,
-    stagePresetId: project.resolution,
+  const snapshot = parseFrameJson(frameRows[0]?.canvasDataUrl ?? null)
+  if (isLayeredSnapshot(snapshot)) {
+    const normalized = normalizeProjectSnapshot(snapshot)
+    return {
+      id: project.id,
+      ...normalized,
+    }
+  }
+
+  const layer = {
+    id: crypto.randomUUID(),
+    name: "Layer 1",
+    visible: true,
     frames: frameRows.map((row) => ({
       id: crypto.randomUUID(),
       json: parseFrameJson(row.canvasDataUrl),
       dataUrl: row.thumbnailUrl,
     })),
+  }
+  const normalized = normalizeProjectSnapshot({
+    title: project.title,
+    layers: [layer],
+    currentLayerId: layer.id,
+    currentFrameIndex: 0,
+    fps: project.fps,
+    stagePresetId: project.resolution,
+    onionSkin: true,
+    onionBefore: 1,
+    onionAfter: 1,
+    onionOpacity: 0.3,
+    brushColor: "#1a1a1a",
+    brushSize: 8,
+  })
+
+  return {
+    id: project.id,
+    ...normalized,
   }
 }
 
