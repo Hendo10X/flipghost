@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { Canvas } from "fabric"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import type { Canvas, FabricObject, TPointerEventInfo, TPointerEvent } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -13,6 +13,7 @@ import {
   ZOOM_MAX,
   ZOOM_MIN,
 } from "@/lib/flipbook/store"
+import { compositeLayerFrameDataUrls } from "@/lib/flipbook/composite"
 import { EraserBrush } from "@/lib/flipbook/eraser-brush"
 import { Button } from "@/components/ui/button"
 import {
@@ -68,6 +69,11 @@ function brushCursor(diameter: number) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`
 }
 
+/** Smallest drag (in stage units) that counts as an intentional shape rather
+ *  than a stray click — anything under this is discarded instead of leaving
+ *  a near-invisible dot on the frame. */
+const MIN_SHAPE_DRAG = 3
+
 export function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageWrapRef = useRef<HTMLDivElement>(null)
@@ -82,10 +88,18 @@ export function CanvasStage() {
     clientY: number
   } | null>(null)
   const zoomAnchorClearRef = useRef<number | null>(null)
+  // Shape-tool drag state: the in-progress rect/ellipse and where the drag
+  // started, in stage (scene) coordinates.
+  const shapeDraftRef = useRef<FabricObject | null>(null)
+  const shapeOriginRef = useRef<{ x: number; y: number } | null>(null)
   const [ready, setReady] = useState(false)
   const [container, setContainer] = useState({ width: 0, height: 0 })
+  const [underlayUrl, setUnderlayUrl] = useState<string | null>(null)
+  const [beforeUrls, setBeforeUrls] = useState<string[]>([])
+  const [afterUrls, setAfterUrls] = useState<string[]>([])
 
-  const currentId = useFlipbook((s) => s.currentId)
+  const currentLayerId = useFlipbook((s) => s.currentLayerId)
+  const currentFrameIndex = useFlipbook((s) => s.currentFrameIndex)
   const revision = useFlipbook((s) => s.revision)
   const tool = useFlipbook((s) => s.tool)
   const brushColor = useFlipbook((s) => s.brushColor)
@@ -98,10 +112,10 @@ export function CanvasStage() {
   const setZoom = useFlipbook((s) => s.setZoom)
   const playing = useFlipbook((s) => s.playing)
   const fps = useFlipbook((s) => s.fps)
-  const frames = useFlipbook((s) => s.frames)
-  const stagePresetId = useFlipbook((s) => s.stagePresetId)
+  const layers = useFlipbook((s) => s.layers)
   const pendingImport = useFlipbook((s) => s.pendingImport)
 
+  const stagePresetId = useFlipbook((s) => s.stagePresetId)
   const stage = getStagePreset(stagePresetId)
   // Scale that fits the stage in the viewport; zoom multiplies it.
   const fitScale = Math.min(
@@ -112,19 +126,71 @@ export function CanvasStage() {
   const displayWidth = Math.max(0, Math.floor(stage.width * scale) || 0)
   const displayHeight = Math.max(0, Math.floor(stage.height * scale) || 0)
 
-  const currentIndex = frames.findIndex((f) => f.id === currentId)
+  const currentLayer = layers.find((layer) => layer.id === currentLayerId) ?? layers[0]
 
   // Nearest neighbours first, so ghost opacity falls off with distance.
-  // Guard on currentIndex: a -1 would make the slices below select wildly.
-  const showOnion = onionSkin && !playing && currentIndex >= 0
-  const beforeFrames = showOnion
-    ? frames.slice(Math.max(0, currentIndex - onionBefore), currentIndex).reverse()
-    : []
-  const afterFrames = showOnion
-    ? frames.slice(currentIndex + 1, currentIndex + 1 + onionAfter)
-    : []
+  // Guard on currentFrameIndex: a -1 would make the slices below select wildly.
+  const showOnion = onionSkin && !playing && currentFrameIndex >= 0
+  const beforeIndices = useMemo(
+    () =>
+      showOnion
+        ? Array.from({ length: Math.min(onionBefore, currentFrameIndex) }, (_, i) => currentFrameIndex - i - 1)
+        : [],
+    [showOnion, onionBefore, currentFrameIndex]
+  )
+  const afterIndices = useMemo(
+    () =>
+      showOnion
+        ? Array.from(
+            { length: Math.min(onionAfter, Math.max(0, (currentLayer?.frames.length ?? 0) - currentFrameIndex - 1)) },
+            (_, i) => currentFrameIndex + i + 1
+          )
+        : [],
+    [showOnion, onionAfter, currentFrameIndex, currentLayer?.frames.length]
+  )
 
   const playImgRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function buildLayerPreviews() {
+      if (!ready || displayWidth === 0 || displayHeight === 0) {
+        setUnderlayUrl(null)
+        setBeforeUrls([])
+        setAfterUrls([])
+        return
+      }
+      const size = { width: stage.width, height: stage.height }
+      const underlay = await compositeLayerFrameDataUrls(layers, currentFrameIndex, size, {
+        excludeLayerId: currentLayerId,
+      })
+      const before = (await Promise.all(
+        beforeIndices.map((index) => compositeLayerFrameDataUrls(layers, index, size))
+      )).filter((url): url is string => Boolean(url))
+      const after = (await Promise.all(
+        afterIndices.map((index) => compositeLayerFrameDataUrls(layers, index, size))
+      )).filter((url): url is string => Boolean(url))
+      if (cancelled) return
+      setUnderlayUrl(underlay)
+      setBeforeUrls(before)
+      setAfterUrls(after)
+    }
+    buildLayerPreviews()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    ready,
+    displayWidth,
+    displayHeight,
+    stage.width,
+    stage.height,
+    layers,
+    currentLayerId,
+    currentFrameIndex,
+    beforeIndices,
+    afterIndices,
+  ])
 
   // --- Fabric lifecycle ---
   useEffect(() => {
@@ -155,12 +221,14 @@ export function CanvasStage() {
       const commit = () => {
         if (!canvas) return
         const state = useFlipbook.getState()
+        const activeLayer = state.layers.find((layer) => layer.id === state.currentLayerId)
+        if (!activeLayer) return
         const json = canvas.toJSON() as Record<string, unknown>
         const dataUrl = canvas.toDataURL({
           format: "png",
           multiplier: SNAPSHOT_SIZE / canvas.getWidth(),
         })
-        state.commitFrame(state.currentId, json, dataUrl)
+        state.commitFrame(activeLayer.id, state.currentFrameIndex, json, dataUrl)
       }
       commitRef.current = commit
 
@@ -175,6 +243,113 @@ export function CanvasStage() {
       // Moving/scaling/rotating with the select tool.
       canvas.on("object:modified", () => commit())
 
+      // --- Shape tools: drag out a rect or circle instead of a freehand path ---
+      function scenePointer(opt: TPointerEventInfo<TPointerEvent>) {
+        // Fabric v6 renamed getPointer() to getScenePoint()/getViewportPoint(),
+        // and puts the scene point directly on the event info object — that's
+        // the coordinate space objects live in (already corrected for the
+        // canvas's current zoom/pan).
+        const withScenePoint = opt as TPointerEventInfo<TPointerEvent> & {
+          scenePoint?: { x: number; y: number }
+        }
+        return withScenePoint.scenePoint ?? canvas!.getScenePoint(opt.e)
+      }
+
+      function onShapeMouseDown(opt: TPointerEventInfo<TPointerEvent>) {
+        const currentTool = useFlipbook.getState().tool as string
+        if (currentTool !== "square" && currentTool !== "circle") return
+        if (!canvas) return
+
+        const pointer = scenePointer(opt)
+        shapeOriginRef.current = pointer
+        const state = useFlipbook.getState()
+
+        const common = {
+          left: pointer.x,
+          top: pointer.y,
+          fill: "transparent",
+          stroke: state.brushColor,
+          strokeWidth: state.brushSize,
+          strokeUniform: true,
+          selectable: false,
+          evented: false,
+          originX: "left" as const,
+          originY: "top" as const,
+        }
+
+        import("fabric").then(({ Rect, Circle }) => {
+          if (!canvas || shapeOriginRef.current !== pointer) return
+          const draft =
+            currentTool === "square"
+              ? new Rect({ ...common, width: 0, height: 0 })
+              : new Circle({ ...common, radius: 0 })
+          shapeDraftRef.current = draft
+          canvas.add(draft)
+          canvas.requestRenderAll()
+        })
+      }
+
+      function onShapeMouseMove(opt: TPointerEventInfo<TPointerEvent>) {
+        const draft = shapeDraftRef.current
+        const origin = shapeOriginRef.current
+        if (!draft || !origin || !canvas) return
+
+        const pointer = scenePointer(opt)
+        const dx = pointer.x - origin.x
+        const dy = pointer.y - origin.y
+
+        if (draft.type === "circle") {
+          const r = Math.max(Math.abs(dx), Math.abs(dy)) / 2
+          const cx = origin.x + dx / 2
+          const cy = origin.y + dy / 2
+          draft.set({ radius: r, left: cx - r, top: cy - r })
+        } else {
+          const size = Math.max(Math.abs(dx), Math.abs(dy))
+          draft.set({
+            width: size,
+            height: size,
+            left: dx < 0 ? origin.x - size : origin.x,
+            top: dy < 0 ? origin.y - size : origin.y,
+          })
+        }
+        draft.setCoords()
+        canvas.requestRenderAll()
+      }
+
+      function onShapeMouseUp() {
+        const draft = shapeDraftRef.current
+        if (!canvas || !draft) {
+          shapeDraftRef.current = null
+          shapeOriginRef.current = null
+          return
+        }
+
+        const finishedSize =
+          draft.type === "circle"
+            ? (draft as unknown as { radius: number }).radius * 2
+            : Math.max(draft.width ?? 0, draft.height ?? 0)
+
+        if (finishedSize < MIN_SHAPE_DRAG) {
+          canvas.remove(draft)
+          canvas.requestRenderAll()
+        } else {
+          draft.set({
+            selectable: useFlipbook.getState().tool === "select",
+            evented: true,
+            perPixelTargetFind: true,
+          })
+          canvas.requestRenderAll()
+          commit()
+        }
+
+        shapeDraftRef.current = null
+        shapeOriginRef.current = null
+      }
+
+      canvas.on("mouse:down", onShapeMouseDown)
+      canvas.on("mouse:move", onShapeMouseMove)
+      canvas.on("mouse:up", onShapeMouseUp)
+
       setReady(true)
     }
 
@@ -186,6 +361,8 @@ export function CanvasStage() {
       fabricRef.current = null
       commitRef.current = null
       eraserBrushRef.current = null
+      shapeDraftRef.current = null
+      shapeOriginRef.current = null
       canvas?.dispose()
     }
   }, [])
@@ -223,8 +400,8 @@ export function CanvasStage() {
       e.preventDefault()
 
       // Record where the cursor sits as a fraction of the stage *before* the
-      // zoom changes, so the scroll-correction effect below knows which
-      // point to keep pinned under the cursor.
+      // zoom changes, then correct against the rendered stage after the new
+      // size lands.
       const stageEl = stageWrapRef.current
       if (stageEl) {
         const rect = stageEl.getBoundingClientRect()
@@ -258,16 +435,10 @@ export function CanvasStage() {
       if (zoomAnchorClearRef.current) {
         window.clearTimeout(zoomAnchorClearRef.current)
       }
+      zoomAnchorRef.current = null
     }
   }, [])
 
-  // --- Keep the cursor's anchor point fixed after a wheel-zoom resize ---
-  // Runs in the paint-blocking phase so the correction lands in the same
-  // frame as the resize. Note: this only works reliably with the container's
-  // `overflow-anchor: none` below — without it, the browser's own scroll
-  // anchoring re-adjusts scrollLeft/scrollTop right after this runs, undoing
-  // the correction and pulling the stage back toward whatever anchor node
-  // the browser picked (which visually looks like a snap to center).
   useLayoutEffect(() => {
     const anchor = zoomAnchorRef.current
     const containerEl = containerRef.current
@@ -275,12 +446,14 @@ export function CanvasStage() {
     if (!anchor || !containerEl || !stageEl) return
 
     const rect = stageEl.getBoundingClientRect()
+    if (rect.width === 0 || rect.height === 0) return
+
     const targetClientX = rect.left + anchor.fracX * rect.width
     const targetClientY = rect.top + anchor.fracY * rect.height
 
     containerEl.scrollLeft += targetClientX - anchor.clientX
     containerEl.scrollTop += targetClientY - anchor.clientY
-  }, [displayWidth, displayHeight, container.width, container.height])
+  }, [scale, container.width, container.height])
 
   // --- Place an imported image onto the current frame ---
   useEffect(() => {
@@ -293,9 +466,7 @@ export function CanvasStage() {
       const image = await FabricImage.fromURL(pendingImport!)
       if (cancelled || !canvas) return
       const state = useFlipbook.getState()
-      const { width: stageW, height: stageH } = getStagePreset(
-        state.stagePresetId
-      )
+      const { width: stageW, height: stageH } = getStagePreset(state.stagePresetId)
       const fit = Math.min(
         (stageW * 0.8) / (image.width || 1),
         (stageH * 0.8) / (image.height || 1),
@@ -344,6 +515,13 @@ export function CanvasStage() {
           canvas.freeDrawingBrush = eraser
         }
         canvas.freeDrawingCursor = "crosshair"
+      } else if ((["square", "circle"] as string[]).includes(tool)) {
+        // Handled by the mouse:down/move/up handlers registered once at
+        // init — this just puts the canvas in the right mode for them.
+        canvas.isDrawingMode = false
+        canvas.selection = false
+        canvas.defaultCursor = "crosshair"
+        canvas.hoverCursor = "crosshair"
       } else {
         canvas.isDrawingMode = false
         canvas.selection = true
@@ -397,7 +575,7 @@ export function CanvasStage() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [ready])
 
-  // --- Load the current frame into the canvas ---
+  // --- Load the current active layer cell into the canvas ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
@@ -407,25 +585,22 @@ export function CanvasStage() {
      * the first has finished, and loadFromJSON does its `clear()` and `add()`
      * *inside* the promise it returns. So a flag checked after the await is
      * already too late: the stale artwork is on the canvas by then, and the
-     * next stroke commits it into whichever frame is now selected, merging the
-     * two for good. The signal makes the superseded load reject before it can
-     * touch anything.
+     * next stroke commits it into whichever frame is now selected.
      */
     const controller = new AbortController()
 
     async function load() {
       if (!canvas) return
       const state = useFlipbook.getState()
-      const frame = state.frames.find((f) => f.id === state.currentId)
+      const layer = state.layers.find((entry) => entry.id === state.currentLayerId)
+      const cell = layer?.frames[state.currentFrameIndex]
       canvas.clear()
-      if (frame?.json) {
+      if (cell?.json) {
         try {
-          await canvas.loadFromJSON(frame.json as object, undefined, {
+          await canvas.loadFromJSON(cell.json as object, undefined, {
             signal: controller.signal,
           })
         } catch {
-          // Aborted, or an unreadable frame. Either way a newer load owns the
-          // canvas now and this one must not draw over it.
           return
         }
         canvas.forEachObject((obj) => {
@@ -437,9 +612,10 @@ export function CanvasStage() {
       }
       canvas.requestRenderAll()
       // Undo/redo drops the cached snapshot; rebuild it from the canvas.
-      if (frame && frame.dataUrl === null && frame.json !== null) {
+      if (layer && cell && cell.dataUrl === null && cell.json !== null) {
         state.setFrameSnapshot(
-          frame.id,
+          layer.id,
+          state.currentFrameIndex,
           canvas.toDataURL({
             format: "png",
             multiplier: SNAPSHOT_SIZE / canvas.getWidth(),
@@ -452,24 +628,33 @@ export function CanvasStage() {
     return () => {
       controller.abort()
     }
-  }, [currentId, revision, ready])
+  }, [currentLayerId, currentFrameIndex, revision, ready])
 
   // --- Playback loop: drives the preview <img> directly, outside React ---
   useEffect(() => {
     if (!playing) return
     const state = useFlipbook.getState()
-    let index = Math.max(
-      0,
-      state.frames.findIndex((f) => f.id === state.currentId)
-    )
+    let index = Math.max(0, state.currentFrameIndex)
+    let cancelled = false
 
-    const render = () => {
+    const render = async () => {
       const img = playImgRef.current
       if (!img) return
-      const currentFrames = useFlipbook.getState().frames
-      const frame = currentFrames[index % currentFrames.length]
-      if (frame?.dataUrl) {
-        img.src = frame.dataUrl
+      const currentState = useFlipbook.getState()
+      const preset = getStagePreset(currentState.stagePresetId)
+      const size = {
+        width: preset.width,
+        height: preset.height,
+      }
+      const composite = await compositeLayerFrameDataUrls(
+        currentState.layers,
+        index % (currentState.layers[0]?.frames.length ?? 1),
+        size,
+        { backgroundColor: "#ffffff" }
+      )
+      if (cancelled || !img) return
+      if (composite) {
+        img.src = composite
         img.style.visibility = "visible"
       } else {
         img.style.visibility = "hidden"
@@ -481,7 +666,10 @@ export function CanvasStage() {
       index += 1
       render()
     }, 1000 / fps)
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [playing, fps])
 
   return (
@@ -493,27 +681,36 @@ export function CanvasStage() {
         className="flex-1 overflow-auto bg-muted/40 [overflow-anchor:none]"
       >
         {/* Sized to the stage (w-max/h-max) but never smaller than the
-            viewport, so centring applies only when there is room to spare.
-            Plain justify-center would push the overflow of a zoomed-in stage
-            to negative offsets, where scrolling cannot reach it. */}
+            viewport, so centring applies only when there is room to spare. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
             ref={stageWrapRef}
             className="relative shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-black/10"
             style={{ width: displayWidth, height: displayHeight }}
           >
-            {beforeFrames.map((frame, i) => (
+            {underlayUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- data URL layers are not optimizable
+              <img
+                src={underlayUrl}
+                alt=""
+                aria-hidden
+                draggable={false}
+                className="pointer-events-none absolute inset-0 size-full select-none"
+              />
+            )}
+
+            {beforeUrls.map((url, i) => (
               <OnionLayer
-                key={frame.id}
-                dataUrl={frame.dataUrl}
+                key={`before-${currentFrameIndex - i - 1}`}
+                dataUrl={url}
                 color="#ef4444"
                 opacity={onionStepOpacity(onionOpacity, i + 1)}
               />
             ))}
-            {afterFrames.map((frame, i) => (
+            {afterUrls.map((url, i) => (
               <OnionLayer
-                key={frame.id}
-                dataUrl={frame.dataUrl}
+                key={`after-${currentFrameIndex + i + 1}`}
+                dataUrl={url}
                 color="#22c55e"
                 opacity={onionStepOpacity(onionOpacity, i + 1)}
               />

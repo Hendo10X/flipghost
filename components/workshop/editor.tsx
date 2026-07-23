@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect } from "react"
 
@@ -11,7 +11,14 @@ import {
   snapshotChanged,
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
-import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
+import {
+  normalizeProjectSnapshot,
+  getStagePreset,
+  useFlipbook,
+  type Frame,
+  type Layer,
+  type ProjectSnapshot,
+} from "@/lib/flipbook/store"
 import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
@@ -20,12 +27,36 @@ import { WorkshopHeader } from "@/components/workshop/header"
 import { Timeline } from "@/components/workshop/timeline"
 import { Toolbar } from "@/components/workshop/toolbar"
 
-export interface InitialProject {
+export interface InitialProject extends ProjectSnapshot {
   id: string
-  title: string
-  fps: number
-  stagePresetId: string
+}
+
+function demoSnapshot(
+  title: string,
+  fps: number,
+  stagePresetId: string,
   frames: Frame[]
+): ProjectSnapshot {
+  const layer: Layer = {
+    id: crypto.randomUUID(),
+    name: "Layer 1",
+    visible: true,
+    frames,
+  }
+  return normalizeProjectSnapshot({
+    title,
+    layers: [layer],
+    currentLayerId: layer.id,
+    currentFrameIndex: 0,
+    fps,
+    stagePresetId,
+    onionSkin: true,
+    onionBefore: 1,
+    onionAfter: 1,
+    onionOpacity: 0.3,
+    brushColor: "#1a1a1a",
+    brushSize: 8,
+  })
 }
 
 export function Editor({
@@ -46,15 +77,12 @@ export function Editor({
     let onHide: (() => void) | undefined
 
     async function boot() {
-      if (initialProject && initialProject.frames.length > 0) {
+      if (initialProject) {
+        const { id, ...project } = initialProject
         useFlipbook.setState((s) => ({
-          projectId: initialProject.id,
+          projectId: id,
           cloudStatus: "saved",
-          title: initialProject.title,
-          fps: initialProject.fps,
-          stagePresetId: initialProject.stagePresetId,
-          frames: initialProject.frames,
-          currentId: initialProject.frames[0].id,
+          ...project,
           past: [],
           future: [],
           revision: s.revision + 1,
@@ -68,11 +96,7 @@ export function Editor({
         useFlipbook.setState((s) => ({
           projectId: null,
           cloudStatus: "idle",
-          title: spec.title,
-          fps: spec.fps,
-          stagePresetId: spec.stagePresetId,
-          frames: demoFrames,
-          currentId: demoFrames[0].id,
+          ...demoSnapshot(spec.title, spec.fps, spec.stagePresetId, demoFrames),
           past: [],
           future: [],
           revision: s.revision + 1,
@@ -80,15 +104,30 @@ export function Editor({
       } else if (initialNew) {
         // Fresh "New animation" at a chosen name/size: blank canvas, clean slate.
         const frame: Frame = { id: crypto.randomUUID(), json: null, dataUrl: null }
+        const layer: Layer = {
+          id: crypto.randomUUID(),
+          name: "Layer 1",
+          visible: true,
+          frames: [frame],
+        }
         clearLocalSnapshot()
         useFlipbook.setState((s) => ({
           projectId: null,
           cloudStatus: "idle",
-          title: initialNew.title,
-          fps: 12,
-          stagePresetId: getStagePreset(initialNew.stagePresetId).id,
-          frames: [frame],
-          currentId: frame.id,
+          ...normalizeProjectSnapshot({
+            title: initialNew.title,
+            layers: [layer],
+            currentLayerId: layer.id,
+            currentFrameIndex: 0,
+            fps: 12,
+            stagePresetId: getStagePreset(initialNew.stagePresetId).id,
+            onionSkin: true,
+            onionBefore: 1,
+            onionAfter: 1,
+            onionOpacity: 0.3,
+            brushColor: "#1a1a1a",
+            brushSize: 8,
+          }),
           past: [],
           future: [],
           revision: s.revision + 1,
@@ -100,7 +139,7 @@ export function Editor({
           useFlipbook.setState((s) => ({
             ...snapshot,
             past: [],
-          future: [],
+            future: [],
             revision: s.revision + 1,
           }))
         }
@@ -111,14 +150,10 @@ export function Editor({
 
       /**
        * A version, not a boolean. The debounce is re-armed by *any* snapshot
-       * change, and the snapshot includes currentId and the brush settings, so
-       * a per-notification "did content change" flag gets replaced by the next
-       * innocent change and the edit it was standing for is dropped. Drawing a
-       * stroke and stepping to the next frame within the window — the normal
-       * way anyone animates — silently threw the stroke away.
-       *
-       * savedVersion only moves on a successful write, so a failed save is
-       * retried by the next edit rather than forgotten.
+       * change, and the snapshot includes the current frame/layer selection and
+       * the brush settings, so a per-notification "did content change" flag
+       * gets replaced by the next innocent change and the edit it was standing
+       * for is dropped.
        */
       let contentVersion = 0
       let savedVersion = 0
@@ -143,13 +178,7 @@ export function Editor({
 
           s.setCloudStatus("saving")
           try {
-            await saveProjectToCloud({
-              projectId: s.projectId,
-              title: s.title,
-              fps: s.fps,
-              stagePresetId: s.stagePresetId,
-              frames: s.frames,
-            })
+            await saveProjectToCloud(s)
             savedVersion = version
             useFlipbook.getState().setCloudStatus("saved")
           } catch {
@@ -169,7 +198,7 @@ export function Editor({
         if (!snapshotChanged(next, previous)) return
 
         if (
-          next.frames !== previous.frames ||
+          next.layers !== previous.layers ||
           next.title !== previous.title ||
           next.fps !== previous.fps ||
           next.stagePresetId !== previous.stagePresetId
@@ -209,70 +238,72 @@ export function Editor({
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
-      if (target?.closest("input, textarea, [contenteditable=true]")) return
+      const isTextField = Boolean(
+        target?.closest("input, textarea, [contenteditable=true]")
+      )
 
       const s = useFlipbook.getState()
       const key = e.key.toLowerCase()
+      const code = e.code.toLowerCase()
+      const mod = e.metaKey || e.ctrlKey
+      const zoomIn = mod && (key === "=" || key === "+" || code === "equal" || code === "numpadadd")
+      const zoomOut = mod && (key === "-" || code === "minus" || code === "numpadsubtract")
+      const zoomReset = mod && (key === "0" || code === "digit0" || code === "numpad0")
 
-      if ((e.metaKey || e.ctrlKey) && key === "z") {
+      if (mod && key === "z") {
         e.preventDefault()
         if (e.shiftKey) s.redo()
         else s.undo()
         return
       }
-      if ((e.metaKey || e.ctrlKey) && key === "y") {
+      if (mod && key === "y") {
         e.preventDefault()
         s.redo()
         return
       }
-      if (e.metaKey || e.ctrlKey) {
-        // Ctrl/Cmd +, -, 0 mirror the canvas zoom controls.
-        if (key === "=" || key === "+") {
-          e.preventDefault()
-          s.setZoom(s.zoom * 1.25)
-        } else if (key === "-") {
-          e.preventDefault()
-          s.setZoom(s.zoom / 1.25)
-        } else if (key === "0") {
-          e.preventDefault()
-          s.setZoom(1)
-        }
+      if (zoomIn || zoomOut || zoomReset) {
+        e.preventDefault()
+        if (zoomIn) s.setZoom(s.zoom * 1.25)
+        else if (zoomOut) s.setZoom(s.zoom / 1.25)
+        else s.setZoom(1)
         return
       }
+      if (isTextField) return
 
       const keys = getHotkeysSnapshot()
       const step = (delta: number) => {
-        const index = s.frames.findIndex((f) => f.id === s.currentId)
-        const next = index + delta
-        if (next >= 0 && next < s.frames.length) {
-          s.selectFrame(s.frames[next].id)
+        const next = s.currentFrameIndex + delta
+        if (next >= 0 && next < (s.layers[0]?.frames.length ?? 0)) {
+          s.selectFrame(next)
         }
       }
 
       let handled = true
-      switch (key) {
-        case keys.playPause:
+      const matches = (action: keyof typeof keys, fallbackKey: string, fallbackCode?: string) =>
+        key === keys[action] || key === fallbackKey || code === fallbackCode
+      switch (true) {
+        case key === keys.playPause:
           s.setPlaying(!s.playing)
           break
-        case keys.select:
+        case key === keys.select:
           s.setTool("select")
           break
-        case keys.brush:
+        case matches("brush", "b", "keyb"):
           s.setTool("brush")
           break
-        case keys.eraser:
+        case matches("eraser", "e", "keye"):
           s.setTool("eraser")
           break
-        case keys.toggleOnion:
+        case key === keys.toggleOnion:
           s.toggleOnionSkin()
           break
-        case keys.addFrame:
+        case key === keys.addFrame:
           s.addFrame()
           break
-        case keys.prevFrame:
+        case key === keys.prevFrame:
           step(-1)
           break
-        case keys.nextFrame:
+        case key === keys.nextFrame:
           step(1)
           break
         default:
@@ -282,8 +313,8 @@ export function Editor({
       if (handled) e.preventDefault()
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
+    window.addEventListener("keydown", onKeyDown, true)
+    return () => window.removeEventListener("keydown", onKeyDown, true)
   }, [])
 
   return (

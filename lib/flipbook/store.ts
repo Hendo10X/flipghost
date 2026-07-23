@@ -1,4 +1,4 @@
-import { create } from "zustand"
+﻿import { create } from "zustand"
 
 /** Snapshot width for thumbnails, onion skins and playback preview. */
 export const SNAPSHOT_SIZE = 720
@@ -49,23 +49,23 @@ export type FrameJSON = Record<string, unknown>
 
 export interface Frame {
   id: string
-  /** Serialized Fabric.js canvas state, null for a blank frame. */
+  /** Serialized Fabric.js canvas state, null for a blank frame cell. */
   json: FrameJSON | null
   /** PNG snapshot (transparent background) used for thumbs/onion/playback. */
   dataUrl: string | null
 }
 
-/**
- * One undoable step: the whole frame list plus which frame was open.
- *
- * Holding the entire list sounds expensive but is close to free. Every
- * mutation below rebuilds the array while reusing the frame objects it did
- * not touch, so a step costs one array of pointers. Nothing is cloned, and
- * the snapshots share their unchanged frames with the live state.
- */
-interface HistoryEntry {
+export interface Layer {
+  id: string
+  name: string
+  visible: boolean
   frames: Frame[]
-  currentId: string
+}
+
+interface HistoryEntry {
+  layers: Layer[]
+  currentLayerId: string
+  currentFrameIndex: number
 }
 
 const HISTORY_LIMIT = 50
@@ -74,17 +74,97 @@ function blankFrame(): Frame {
   return { id: crypto.randomUUID(), json: null, dataUrl: null }
 }
 
-function entryOf(state: { frames: Frame[]; currentId: string }): HistoryEntry {
-  return { frames: state.frames, currentId: state.currentId }
+function blankLayer(name: string, frameCount: number): Layer {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    visible: true,
+    frames: Array.from({ length: frameCount }, () => blankFrame()),
+  }
 }
 
-/**
- * Wraps a change so it can be undone, recording where we were before it.
- * Any new edit drops the redo stack, which is the usual branching rule.
- */
+function cloneFrame(frame: Frame, regenerateId = false): Frame {
+  return {
+    id: regenerateId ? crypto.randomUUID() : frame.id,
+    json: frame.json ? structuredClone(frame.json) : null,
+    dataUrl: frame.dataUrl,
+  }
+}
+
+function cloneLayer(layer: Layer, regenerateFrameIds = false): Layer {
+  return {
+    id: layer.id,
+    name: layer.name,
+    visible: layer.visible,
+    frames: layer.frames.map((frame) => cloneFrame(frame, regenerateFrameIds)),
+  }
+}
+
+function ensureLayerFrames(layer: Layer, frameCount: number): Layer {
+  if (layer.frames.length === frameCount) return layer
+  if (layer.frames.length > frameCount) {
+    return { ...layer, frames: layer.frames.slice(0, frameCount) }
+  }
+  return {
+    ...layer,
+    frames: [...layer.frames, ...Array.from({ length: frameCount - layer.frames.length }, () => blankFrame())],
+  }
+}
+
+function layersWithFrameCount(layers: Layer[], frameCount: number) {
+  return layers.map((layer) => ensureLayerFrames(layer, frameCount))
+}
+
+function uniqueFrameIds(layers: Layer[]) {
+  const seen = new Set<string>()
+  return layers.map((layer) => ({
+    ...layer,
+    frames: layer.frames.map((frame) => {
+      if (seen.has(frame.id)) {
+        return { ...frame, id: crypto.randomUUID() }
+      }
+      seen.add(frame.id)
+      return frame
+    }),
+  }))
+}
+
+function currentLayerIndex(state: { layers: Layer[]; currentLayerId: string }) {
+  return Math.max(0, state.layers.findIndex((layer) => layer.id === state.currentLayerId))
+}
+
+function frameCountOf(layers: Layer[]) {
+  return layers[0]?.frames.length ?? 0
+}
+
+function cellAt(layer: Layer | undefined, index: number) {
+  return layer?.frames[index] ?? null
+}
+
+function entryOf(state: {
+  layers: Layer[]
+  currentLayerId: string
+  currentFrameIndex: number
+}): HistoryEntry {
+  return {
+    layers: state.layers.map((layer) => cloneLayer(layer)),
+    currentLayerId: state.currentLayerId,
+    currentFrameIndex: state.currentFrameIndex,
+  }
+}
+
 function recording(
-  state: { frames: Frame[]; currentId: string; past: HistoryEntry[] },
-  next: { frames: Frame[]; currentId?: string }
+  state: {
+    layers: Layer[]
+    currentLayerId: string
+    currentFrameIndex: number
+    past: HistoryEntry[]
+  },
+  next: {
+    layers: Layer[]
+    currentLayerId?: string
+    currentFrameIndex?: number
+  }
 ) {
   return {
     ...next,
@@ -93,35 +173,100 @@ function recording(
   }
 }
 
-interface FlipbookState {
+function makeLayerName(baseName: string, layers: Layer[]) {
+  const existing = new Set(layers.map((layer) => layer.name))
+  if (!existing.has(baseName)) return baseName
+  let index = 2
+  while (existing.has(`${baseName} ${index}`)) index += 1
+  return `${baseName} ${index}`
+}
+
+function insertAt<T>(items: T[], index: number, item: T) {
+  const next = [...items]
+  next.splice(index, 0, item)
+  return next
+}
+
+function moveAt<T>(items: T[], fromIndex: number, toIndex: number) {
+  const next = [...items]
+  const [moved] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, moved)
+  return next
+}
+
+export interface ProjectSnapshot {
   title: string
-  frames: Frame[]
-  currentId: string
-  /**
-   * Bumped whenever frame content changes outside the canvas
-   * (undo/redo/clear) so the canvas knows to reload from the store.
-   */
-  revision: number
+  layers: Layer[]
+  currentLayerId: string
+  currentFrameIndex: number
   fps: number
-  playing: boolean
   onionSkin: boolean
-  /** How many frames before/after the current one to ghost (0-3). */
   onionBefore: number
   onionAfter: number
-  /** Opacity of the nearest ghost; further ones fall off from here. */
   onionOpacity: number
+  stagePresetId: string
+  brushColor: string
+  brushSize: number
+}
+
+export function normalizeProjectSnapshot(
+  snapshot: Partial<ProjectSnapshot> & {
+    layers?: Layer[]
+  }
+): ProjectSnapshot {
+  const layers = snapshot.layers?.length
+    ? snapshot.layers.map((layer) => cloneLayer(layer))
+    : [blankLayer("Layer 1", 1)]
+  const frameCount = Math.max(1, frameCountOf(layers))
+  const normalizedLayers = uniqueFrameIds(layersWithFrameCount(layers, frameCount))
+  const firstLayer = normalizedLayers[0]
+  const currentLayerId =
+    normalizedLayers.find((layer) => layer.id === snapshot.currentLayerId)?.id ??
+    firstLayer.id
+  const currentFrameIndex = clamp(
+    Math.round(snapshot.currentFrameIndex ?? 0),
+    0,
+    frameCount - 1
+  )
+
+  return {
+    title: snapshot.title?.trim() || "Untitled Animation",
+    layers: normalizedLayers,
+    currentLayerId,
+    currentFrameIndex,
+    fps: Number.isFinite(snapshot.fps) ? Math.round(snapshot.fps!) : 12,
+    onionSkin: snapshot.onionSkin ?? true,
+    onionBefore: clamp(Math.round(snapshot.onionBefore ?? 1), 0, ONION_MAX),
+    onionAfter: clamp(Math.round(snapshot.onionAfter ?? 1), 0, ONION_MAX),
+    onionOpacity: clamp(snapshot.onionOpacity ?? 0.3, 0.05, 0.8),
+    stagePresetId: getStagePreset(snapshot.stagePresetId ?? "square").id,
+    brushColor: snapshot.brushColor ?? "#1a1a1a",
+    brushSize: Math.max(1, Math.round(snapshot.brushSize ?? 8)),
+  }
+}
+
+export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
+  return normalizeProjectSnapshot(state)
+}
+
+/** Shallow compare, so new snapshot fields are covered automatically. */
+export function snapshotChanged(a: ProjectSnapshot, b: ProjectSnapshot) {
+  return (Object.keys(a) as (keyof ProjectSnapshot)[]).some((key) => a[key] !== b[key])
+}
+
+interface FlipbookState extends ProjectSnapshot {
+  /** Bumped whenever frame content changes outside the canvas. */
+  revision: number
+  playing: boolean
   /** Viewport zoom, where 1 fits the stage to the viewport. */
   zoom: number
   tool: Tool
-  brushColor: string
-  brushSize: number
-  stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
   /** Cloud project id once saved; null means local scratch work. */
   projectId: string | null
   cloudStatus: "idle" | "saving" | "saved" | "error"
-  /** Undo/redo stacks over the frame list. See {@link HistoryEntry}. */
+  /** Undo/redo stacks over the layer stack. */
   past: HistoryEntry[]
   future: HistoryEntry[]
 
@@ -142,27 +287,49 @@ interface FlipbookState {
   setOnionOpacity: (opacity: number) => void
   setZoom: (zoom: number) => void
 
-  selectFrame: (id: string) => void
+  selectLayer: (id: string) => void
+  selectFrame: (index: number) => void
+  setLayerName: (id: string, name: string) => void
+  toggleLayerVisibility: (id: string) => void
+  addLayer: () => void
+  duplicateLayer: () => void
+  deleteLayer: () => void
+  reorderLayers: (fromIndex: number, toIndex: number) => void
   addFrame: () => void
   duplicateFrame: () => void
   deleteFrame: () => void
   reorderFrames: (fromIndex: number, toIndex: number) => void
 
   /** Record a canvas-driven change (stroke drawn, stroke erased). */
-  commitFrame: (id: string, json: FrameJSON, dataUrl: string | null) => void
+  commitFrame: (
+    layerId: string,
+    frameIndex: number,
+    json: FrameJSON,
+    dataUrl: string | null
+  ) => void
   /** Refresh a frame's snapshot without touching history (after undo/redo). */
-  setFrameSnapshot: (id: string, dataUrl: string | null) => void
+  setFrameSnapshot: (layerId: string, frameIndex: number, dataUrl: string | null) => void
   clearFrame: () => void
   undo: () => void
   redo: () => void
 }
 
-const initialFrame = blankFrame()
+function activeCellState(state: FlipbookState) {
+  const layerIndex = currentLayerIndex(state)
+  return {
+    layerIndex,
+    layer: state.layers[layerIndex],
+    cell: cellAt(state.layers[layerIndex], state.currentFrameIndex),
+  }
+}
+
+const initialLayer = blankLayer("Layer 1", 1)
 
 export const useFlipbook = create<FlipbookState>((set, get) => ({
   title: "Untitled Animation",
-  frames: [initialFrame],
-  currentId: initialFrame.id,
+  layers: [initialLayer],
+  currentLayerId: initialLayer.id,
+  currentFrameIndex: 0,
   revision: 0,
   fps: 12,
   playing: false,
@@ -183,8 +350,7 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
 
   setProjectId: (projectId) => set({ projectId }),
   setCloudStatus: (cloudStatus) => set({ cloudStatus }),
-  setStagePreset: (id) =>
-    set({ stagePresetId: getStagePreset(id).id }),
+  setStagePreset: (id) => set({ stagePresetId: getStagePreset(id).id }),
   requestImport: (dataUrl) => set({ pendingImport: dataUrl }),
   clearPendingImport: () => set({ pendingImport: null }),
   setTitle: (title) => set({ title }),
@@ -194,105 +360,254 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   setFps: (fps) => set({ fps }),
   setPlaying: (playing) => set({ playing }),
   toggleOnionSkin: () => set((s) => ({ onionSkin: !s.onionSkin })),
-  setOnionBefore: (count) =>
-    set({ onionBefore: clamp(Math.round(count), 0, ONION_MAX) }),
-  setOnionAfter: (count) =>
-    set({ onionAfter: clamp(Math.round(count), 0, ONION_MAX) }),
-  setOnionOpacity: (opacity) =>
-    set({ onionOpacity: clamp(opacity, 0.05, 0.8) }),
+  setOnionBefore: (count) => set({ onionBefore: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionAfter: (count) => set({ onionAfter: clamp(Math.round(count), 0, ONION_MAX) }),
+  setOnionOpacity: (opacity) => set({ onionOpacity: clamp(opacity, 0.05, 0.8) }),
   setZoom: (zoom) => set({ zoom: clamp(zoom, ZOOM_MIN, ZOOM_MAX) }),
 
-  selectFrame: (id) => {
-    if (get().frames.some((f) => f.id === id)) set({ currentId: id })
+  selectLayer: (id) => {
+    if (get().layers.some((layer) => layer.id === id)) set({ currentLayerId: id })
   },
 
-  addFrame: () =>
+  selectFrame: (index) => {
+    if (index >= 0 && index < frameCountOf(get().layers)) {
+      set({ currentFrameIndex: index })
+    }
+  },
+
+  setLayerName: (id, name) =>
     set((s) => {
-      const index = s.frames.findIndex((f) => f.id === s.currentId)
-      const frame = blankFrame()
-      const frames = [...s.frames]
-      frames.splice(index + 1, 0, frame)
-      return recording(s, { frames, currentId: frame.id })
+      const nextName = name.trim().slice(0, 40)
+      const layers = s.layers.map((layer) =>
+        layer.id === id ? { ...layer, name: nextName } : layer
+      )
+      return recording(s, { layers })
     }),
 
-  duplicateFrame: () =>
+  toggleLayerVisibility: (id) =>
     set((s) => {
-      const index = s.frames.findIndex((f) => f.id === s.currentId)
-      const source = s.frames[index]
-      const copy: Frame = {
-        id: crypto.randomUUID(),
-        json: source.json ? structuredClone(source.json) : null,
-        dataUrl: source.dataUrl,
+      const layers = s.layers.map((layer) =>
+        layer.id === id ? { ...layer, visible: !layer.visible } : layer
+      )
+      return recording(s, { layers })
+    }),
+
+  addLayer: () =>
+    set((s) => {
+      const next = blankLayer(makeLayerName(`Layer ${s.layers.length + 1}`, s.layers), frameCountOf(s.layers) || 1)
+      const layerIndex = currentLayerIndex(s)
+      return recording(s, {
+        layers: insertAt(s.layers, layerIndex + 1, next),
+        currentLayerId: next.id,
+      })
+    }),
+
+  duplicateLayer: () =>
+    set((s) => {
+      const layerIndex = currentLayerIndex(s)
+      const source = s.layers[layerIndex]
+      const copy = cloneLayer(source, true)
+      copy.id = crypto.randomUUID()
+      copy.name = makeLayerName(`${source.name} copy`, s.layers)
+      return recording(s, {
+        layers: insertAt(s.layers, layerIndex + 1, copy),
+        currentLayerId: copy.id,
+      })
+    }),
+
+  deleteLayer: () =>
+    set((s) => {
+      if (s.layers.length === 1) {
+        const layer = blankLayer("Layer 1", frameCountOf(s.layers) || 1)
+        return recording(s, {
+          layers: [layer],
+          currentLayerId: layer.id,
+        })
       }
-      const frames = [...s.frames]
-      frames.splice(index + 1, 0, copy)
-      return recording(s, { frames, currentId: copy.id })
+      const layerIndex = currentLayerIndex(s)
+      const nextLayers = s.layers.filter((layer) => layer.id !== s.currentLayerId)
+      const nextLayer = nextLayers[Math.min(layerIndex, nextLayers.length - 1)]
+      return recording(s, {
+        layers: nextLayers,
+        currentLayerId: nextLayer.id,
+      })
     }),
 
-  deleteFrame: () =>
-    set((s) => {
-      const index = s.frames.findIndex((f) => f.id === s.currentId)
-
-      // Deleting the only frame leaves a blank one rather than no canvas.
-      if (s.frames.length === 1) {
-        const frame = blankFrame()
-        return recording(s, { frames: [frame], currentId: frame.id })
-      }
-      const frames = s.frames.filter((f) => f.id !== s.currentId)
-      const next = frames[Math.min(index, frames.length - 1)]
-      return recording(s, { frames, currentId: next.id })
-    }),
-
-  reorderFrames: (fromIndex, toIndex) =>
+  reorderLayers: (fromIndex, toIndex) =>
     set((s) => {
       if (
         fromIndex === toIndex ||
         fromIndex < 0 ||
         toIndex < 0 ||
-        fromIndex >= s.frames.length ||
-        toIndex >= s.frames.length
+        fromIndex >= s.layers.length ||
+        toIndex >= s.layers.length
       ) {
         return s
       }
-      const frames = [...s.frames]
-      const [moved] = frames.splice(fromIndex, 1)
-      frames.splice(toIndex, 0, moved)
-      return recording(s, { frames })
+      const layers = moveAt(s.layers, fromIndex, toIndex)
+      return {
+        ...recording(s, { layers }),
+        revision: s.revision + 1,
+      }
     }),
 
-  commitFrame: (id, json, dataUrl) =>
+  addFrame: () =>
     set((s) => {
-      const frame = s.frames.find((f) => f.id === id)
-      if (!frame) return s
-      return recording(s, {
-        frames: s.frames.map((f) => (f.id === id ? { ...f, json, dataUrl } : f)),
+      const frameIndex = Math.max(0, s.currentFrameIndex)
+      const layers = s.layers.map((layer) => {
+        const frames = [...layer.frames]
+        frames.splice(frameIndex + 1, 0, blankFrame())
+        return { ...layer, frames }
       })
+      return {
+        ...recording(s, {
+          layers,
+          currentFrameIndex: frameIndex + 1,
+        }),
+        revision: s.revision + 1,
+      }
     }),
 
-  setFrameSnapshot: (id, dataUrl) =>
+  duplicateFrame: () =>
+    set((s) => {
+      const frameIndex = Math.max(0, s.currentFrameIndex)
+      const layers = s.layers.map((layer) => {
+        const source = layer.frames[frameIndex] ?? blankFrame()
+        const copy = cloneFrame(source, true)
+        const frames = [...layer.frames]
+        frames.splice(frameIndex + 1, 0, copy)
+        return { ...layer, frames }
+      })
+      return {
+        ...recording(s, {
+          layers,
+          currentFrameIndex: frameIndex + 1,
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  deleteFrame: () =>
+    set((s) => {
+      const frameCount = frameCountOf(s.layers)
+      const frameIndex = Math.max(0, Math.min(s.currentFrameIndex, frameCount - 1))
+      if (frameCount <= 1) {
+        const layers = s.layers.map((layer) => ({
+          ...layer,
+          frames: [blankFrame()],
+        }))
+        return {
+          ...recording(s, {
+            layers,
+            currentFrameIndex: 0,
+          }),
+          revision: s.revision + 1,
+        }
+      }
+      const layers = s.layers.map((layer) => ({
+        ...layer,
+        frames: layer.frames.filter((_, index) => index !== frameIndex),
+      }))
+      return {
+        ...recording(s, {
+          layers,
+          currentFrameIndex: Math.min(frameIndex, frameCount - 2),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  reorderFrames: (fromIndex, toIndex) =>
+    set((s) => {
+      const frameCount = frameCountOf(s.layers)
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= frameCount ||
+        toIndex >= frameCount
+      ) {
+        return s
+      }
+      const layers = s.layers.map((layer) => ({
+        ...layer,
+        frames: moveAt(layer.frames, fromIndex, toIndex),
+      }))
+      const currentFrameIndex =
+        s.currentFrameIndex === fromIndex
+          ? toIndex
+          : s.currentFrameIndex > fromIndex && s.currentFrameIndex <= toIndex
+            ? s.currentFrameIndex - 1
+            : s.currentFrameIndex < fromIndex && s.currentFrameIndex >= toIndex
+              ? s.currentFrameIndex + 1
+              : s.currentFrameIndex
+      return {
+        ...recording(s, { layers, currentFrameIndex }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  commitFrame: (layerId, frameIndex, json, dataUrl) =>
+    set((s) => {
+      const layerIndex = s.layers.findIndex((layer) => layer.id === layerId)
+      if (layerIndex < 0) return s
+      const layer = s.layers[layerIndex]
+      if (frameIndex < 0 || frameIndex >= layer.frames.length) return s
+      const layers = s.layers.map((entry) =>
+        entry.id === layerId
+          ? {
+              ...entry,
+              frames: entry.frames.map((frame, index) =>
+                index === frameIndex ? { ...frame, json, dataUrl } : frame
+              ),
+            }
+          : entry
+      )
+      return {
+        ...recording(s, { layers }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  setFrameSnapshot: (layerId, frameIndex, dataUrl) =>
     set((s) => ({
-      frames: s.frames.map((f) => (f.id === id ? { ...f, dataUrl } : f)),
+      layers: s.layers.map((entry) =>
+        entry.id === layerId
+          ? {
+              ...entry,
+              frames: entry.frames.map((frame, index) =>
+                index === frameIndex ? { ...frame, dataUrl } : frame
+              ),
+            }
+          : entry
+      ),
     })),
 
   clearFrame: () =>
     set((s) => {
-      const frame = s.frames.find((f) => f.id === s.currentId)
-      if (!frame || (!frame.json && !frame.dataUrl)) return s
+      const { layer, cell } = activeCellState(s)
+      if (!layer || (!cell?.json && !cell?.dataUrl)) return s
+      const layers = s.layers.map((entry) =>
+        entry.id === layer.id
+          ? {
+              ...entry,
+              frames: entry.frames.map((frame, index) =>
+                index === s.currentFrameIndex
+                  ? { ...frame, json: null, dataUrl: null }
+                  : frame
+              ),
+            }
+          : entry
+      )
       return {
-        ...recording(s, {
-          frames: s.frames.map((f) =>
-            f.id === s.currentId ? { ...f, json: null, dataUrl: null } : f
-          ),
-        }),
+        ...recording(s, { layers }),
         revision: s.revision + 1,
       }
     }),
 
   /**
    * Steps back one edit, whatever it was: a stroke, a cleared frame, or a
-   * frame added, duplicated, reordered, or deleted. Restoring `currentId`
-   * alongside the frames means undo lands you on the frame that changed
-   * rather than silently altering one you cannot see.
+   * frame/layer added, duplicated, reordered, or deleted.
    */
   undo: () =>
     set((s) => {
@@ -300,8 +615,9 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       const past = [...s.past]
       const entry = past.pop()!
       return {
-        frames: entry.frames,
-        currentId: entry.currentId,
+        layers: entry.layers,
+        currentLayerId: entry.currentLayerId,
+        currentFrameIndex: entry.currentFrameIndex,
         past,
         future: [...s.future, entryOf(s)].slice(-HISTORY_LIMIT),
         revision: s.revision + 1,
@@ -314,8 +630,9 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       const future = [...s.future]
       const entry = future.pop()!
       return {
-        frames: entry.frames,
-        currentId: entry.currentId,
+        layers: entry.layers,
+        currentLayerId: entry.currentLayerId,
+        currentFrameIndex: entry.currentFrameIndex,
         past: [...s.past, entryOf(s)].slice(-HISTORY_LIMIT),
         future,
         revision: s.revision + 1,

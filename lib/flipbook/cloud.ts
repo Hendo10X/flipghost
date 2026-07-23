@@ -1,16 +1,21 @@
-import type { Frame } from "./store"
+﻿import { compositeLayerFrameDataUrls } from "./composite"
+import { getStagePreset, normalizeProjectSnapshot, type ProjectSnapshot } from "./store"
 
-export interface SaveProjectInput {
+export interface SaveProjectInput extends ProjectSnapshot {
   projectId: string | null
-  title: string
-  fps: number
-  stagePresetId: string
-  frames: Frame[]
 }
 
 export async function saveProjectToCloud(
   input: SaveProjectInput
 ): Promise<{ id: string }> {
+  const snapshot = normalizeProjectSnapshot(input)
+  const preset = getStagePreset(snapshot.stagePresetId)
+  const thumbnail = await compositeLayerFrameDataUrls(
+    snapshot.layers,
+    snapshot.currentFrameIndex,
+    { width: preset.width, height: preset.height },
+    { backgroundColor: "#ffffff" }
+  )
   const response = await fetch("/api/projects", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,11 +24,13 @@ export async function saveProjectToCloud(
       title: input.title,
       fps: input.fps,
       stagePresetId: input.stagePresetId,
-      frames: input.frames.map((frame, index) => ({
-        orderIndex: index,
-        json: frame.json ? JSON.stringify(frame.json) : null,
-        thumbnail: frame.dataUrl,
-      })),
+      frames: [
+        {
+          orderIndex: 0,
+          json: JSON.stringify(snapshot),
+          thumbnail,
+        },
+      ],
     }),
   })
   if (!response.ok) {

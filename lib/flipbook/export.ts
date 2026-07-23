@@ -1,4 +1,5 @@
-import type { Frame } from "./store"
+﻿import { compositeLayerFrameDataUrls } from "./composite"
+import { normalizeProjectSnapshot, type ProjectSnapshot } from "./store"
 
 export type ExportFormat = "gif" | "mp4"
 
@@ -15,53 +16,63 @@ export interface ExportProgress {
 
 type OnProgress = (progress: ExportProgress) => void
 
+async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return await new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error("Image load failed"))
+    img.src = dataUrl
+  })
+}
+
 /**
- * Renders every frame's Fabric JSON onto a white canvas at the stage's
- * logical resolution. Runs client-side only.
+ * Renders every timeline frame by compositing the visible layers at that slot.
+ * Runs client-side only.
  */
 async function renderFrames(
-  frames: Frame[],
+  snapshot: ProjectSnapshot,
   { width, height }: ExportSize,
   onProgress: OnProgress
 ): Promise<HTMLCanvasElement[]> {
-  const { StaticCanvas } = await import("fabric")
-  const stage = new StaticCanvas(undefined, { width, height })
   const rendered: HTMLCanvasElement[] = []
+  const frameCount = snapshot.layers[0]?.frames.length ?? 0
 
-  try {
-    for (let i = 0; i < frames.length; i++) {
-      stage.clear()
-      if (frames[i].json) {
-        await stage.loadFromJSON(frames[i].json as object)
-      }
-      stage.renderAll()
-      const layer = stage.toCanvasElement(1)
+  for (let i = 0; i < frameCount; i++) {
+    const composite = await compositeLayerFrameDataUrls(
+      snapshot.layers,
+      i,
+      { width, height },
+      { backgroundColor: "#ffffff" }
+    )
 
-      const out = document.createElement("canvas")
-      out.width = width
-      out.height = height
-      const ctx = out.getContext("2d")!
-      ctx.fillStyle = "#ffffff"
-      ctx.fillRect(0, 0, width, height)
-      ctx.drawImage(layer, 0, 0, width, height)
-      rendered.push(out)
-      onProgress({ value: ((i + 1) / frames.length) * 0.5, stage: "rendering" })
+    const out = document.createElement("canvas")
+    out.width = width
+    out.height = height
+    const ctx = out.getContext("2d")!
+    ctx.fillStyle = "#ffffff"
+    ctx.fillRect(0, 0, width, height)
+
+    if (composite) {
+      const img = await loadImage(composite)
+      ctx.drawImage(img, 0, 0, width, height)
     }
-  } finally {
-    stage.dispose()
+
+    rendered.push(out)
+    onProgress({ value: ((i + 1) / frameCount) * 0.5, stage: "rendering" })
   }
   return rendered
 }
 
 export async function exportGif(
-  frames: Frame[],
+  snapshot: ProjectSnapshot,
   fps: number,
   size: ExportSize,
   onProgress: OnProgress
 ): Promise<Blob> {
+  const normalized = normalizeProjectSnapshot(snapshot)
   const [{ GIFEncoder, quantize, applyPalette }, canvases] = await Promise.all([
     import("gifenc"),
-    renderFrames(frames, size, onProgress),
+    renderFrames(normalized, size, onProgress),
   ])
 
   const gif = GIFEncoder()
@@ -91,7 +102,7 @@ export async function exportGif(
 const FFMPEG_CORE = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd"
 
 export async function exportMp4(
-  frames: Frame[],
+  snapshot: ProjectSnapshot,
   fps: number,
   size: ExportSize,
   onProgress: OnProgress
@@ -111,9 +122,10 @@ export async function exportMp4(
     return { instance, fetchFile }
   }
 
+  const normalized = normalizeProjectSnapshot(snapshot)
   const [{ instance: ffmpeg, fetchFile }, canvases] = await Promise.all([
     loadFFmpeg(),
-    renderFrames(frames, size, (p) =>
+    renderFrames(normalized, size, (p) =>
       onProgress({ value: p.value * 0.6, stage: "rendering" })
     ),
   ])
