@@ -43,7 +43,13 @@ export function getStagePreset(id: string): StagePreset {
   return STAGE_PRESETS.find((p) => p.id === id) ?? STAGE_PRESETS[0]
 }
 
-export type Tool = "brush" | "eraser" | "select"
+/**
+ * `eyedropper` is a mode rather than a tool you stay in: the next click on the
+ * canvas takes a colour and hands you straight back to the brush. It is not in
+ * the toolbar rail for that reason — it lives in the colour popover, which is
+ * where you are standing when you want it.
+ */
+export type Tool = "brush" | "eraser" | "select" | "eyedropper"
 
 export type FrameJSON = Record<string, unknown>
 
