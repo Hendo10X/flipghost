@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useRef, useState } from "react"
 import {
@@ -193,7 +193,7 @@ export function Timeline() {
     if (viewLayerIndex > layers.length - 1) {
       setViewLayerIndex(Math.max(0, layers.length - 1))
     }
-  }, [layers.length, viewLayerIndex])
+  }, [layers.length])
 
   const goToLayer = (index: number) => {
     const clamped = Math.min(Math.max(index, 0), layers.length - 1)
@@ -550,7 +550,7 @@ export function Timeline() {
                         onChange={(e) => setLayerName(layer.id, e.target.value)}
                         aria-label={`Layer name ${layerIndex + 1}`}
                         spellCheck={false}
-                        className="min-w-0 flex-1 border border-transparent bg-transparent px-2 py-1 text-sm font-medium outline-none placeholder:text-muted-foreground focus:border-border focus:bg-background/80 focus:ring-2 focus:ring-ring/20"
+                        className="min-w-0 flex-1 border border-transparent bg-transparent px-2 py-1 text-sm font-medium outline-none placeholder:text-muted-foreground focus:border-border focus:bg-background"
                       />
 
                       <div className="flex items-center gap-0.5">
