@@ -176,10 +176,10 @@ export function Timeline() {
   }, [currentId, reducedMotion])
 
   return (
-    <div className="flex flex-col gap-2 border-t px-4 py-3">
+    <div data-tour="timeline" className="flex flex-col gap-2 border-t px-4 py-3">
       {/* Height and a floor on width, rather than a square: the onion skin
           toggle carries a label and must stay its natural width. */}
-      <div className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11 max-lg:[&_[data-slot=button]]:h-11 max-lg:[&_[data-slot=button]]:min-w-11">
+      <div data-tour="playback-fps" className="flex items-center gap-3 pointer-coarse:[&_[data-slot=button]]:h-11 pointer-coarse:[&_[data-slot=button]]:min-w-11 max-lg:[&_[data-slot=button]]:h-11 max-lg:[&_[data-slot=button]]:min-w-11">
         <Tooltip>
           <TooltipTrigger
             render={
@@ -238,6 +238,7 @@ export function Timeline() {
           <TooltipTrigger
             render={
               <Button
+                data-tour="onion-skin"
                 variant="ghost"
                 size="sm"
                 aria-pressed={onionSkin}

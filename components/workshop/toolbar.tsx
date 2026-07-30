@@ -181,160 +181,166 @@ export function Toolbar() {
     // together and the rail widens to hold them. Keyed off both a coarse
     // pointer (a real tablet, at any width) and tablet widths (a desktop
     // browser resized down, which reports a fine pointer).
-    <aside className="flex w-12 flex-col items-center gap-1 border-r py-3 pointer-coarse:w-16 max-lg:w-16 pointer-coarse:[&_[data-slot=button]]:size-11 max-lg:[&_[data-slot=button]]:size-11">
-      {TOOLS.map(({ tool: t, label, icon }) => (
-        <Tooltip key={t}>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                aria-label={label}
-                aria-pressed={t === tool}
-                data-cuelume-toggle
-                onClick={() => setTool(t)}
-                className={cn(
-                  "text-muted-foreground",
-                  t === tool && "bg-muted text-foreground"
-                )}
-              >
-                <HugeiconsIcon icon={icon} strokeWidth={1.8} />
-              </Button>
-            }
-          />
-          <TooltipContent side="right">{label}</TooltipContent>
-        </Tooltip>
-      ))}
+    <aside data-tour="toolbar" className="flex w-12 flex-col items-center gap-1 border-r py-3 pointer-coarse:w-16 max-lg:w-16 pointer-coarse:[&_[data-slot=button]]:size-11 max-lg:[&_[data-slot=button]]:size-11">
+      <div data-tour="tools" className="flex flex-col items-center gap-1">
+        {TOOLS.map(({ tool: t, label, icon }) => (
+          <Tooltip key={t}>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label={label}
+                  aria-pressed={t === tool}
+                  data-cuelume-toggle
+                  onClick={() => setTool(t)}
+                  className={cn(
+                    "text-muted-foreground",
+                    t === tool && "bg-muted text-foreground"
+                  )}
+                >
+                  <HugeiconsIcon icon={icon} strokeWidth={1.8} />
+                </Button>
+              }
+            />
+            <TooltipContent side="right">{label}</TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
 
       <div className="my-2 h-px w-6 bg-border" />
 
-      <Popover open={pickerOpen} onOpenChange={onPickerOpenChange}>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    aria-label="Brush color"
-                    // Sampling closes the popover, so without this the rail
-                    // would show no active tool at all and the mode would be
-                    // invisible until you clicked something.
-                    className={cn(tool === "eyedropper" && "bg-muted")}
-                  >
-                    <span
-                      className="size-4 rounded-full ring-1 ring-black/15 ring-inset dark:ring-white/20"
-                      style={{ backgroundColor: brushColor }}
-                    />
-                  </Button>
-                }
-              />
-            }
-          />
-          <TooltipContent side="right">
-            {tool === "eyedropper" ? "Click the canvas to pick" : "Brush color"}
-          </TooltipContent>
-        </Tooltip>
-        <PopoverContent side="right" align="start" className="w-auto">
-          {/* Presets first and the picker folded away: reaching for red is the
-              common errand, and it was sitting underneath a 176px saturation
-              square. react-colorful is 200px wide by default, so the w-44 on it
-              is what holds it inside this column. */}
-          <div className="flex w-44 flex-col gap-3 [&_.react-colorful]:h-44 [&_.react-colorful]:w-44">
-            <div
-              role="radiogroup"
-              aria-label="Palette"
-              className="grid grid-cols-5 gap-1.5"
-            >
-              {PALETTE.map(({ name, value }) => (
-                <Swatch
-                  key={value}
-                  color={value}
-                  label={name}
-                  selected={currentColor === value}
-                  onSelect={() => setBrushColor(value)}
+      <div data-tour="color-picker">
+        <Popover open={pickerOpen} onOpenChange={onPickerOpenChange}>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-lg"
+                      aria-label="Brush color"
+                      className={cn(tool === "eyedropper" && "bg-muted")}
+                    >
+                      <span
+                        className="size-4 rounded-full ring-1 ring-black/15 ring-inset dark:ring-white/20"
+                        style={{ backgroundColor: brushColor }}
+                      />
+                    </Button>
+                  }
                 />
-              ))}
-            </div>
+              }
+            />
+            <TooltipContent side="right">
+              {tool === "eyedropper" ? "Click the canvas to pick" : "Brush color"}
+            </TooltipContent>
+          </Tooltip>
+          <PopoverContent side="right" align="start" className="w-auto">
+            <div className="flex w-44 flex-col gap-3 [&_.react-colorful]:h-44 [&_.react-colorful]:w-44">
+              <div
+                role="radiogroup"
+                aria-label="Palette"
+                className="grid grid-cols-5 gap-1.5"
+              >
+                {PALETTE.map(({ name, value }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    role="radio"
+                    aria-checked={currentColor === value}
+                    aria-label={name}
+                    onClick={() => {
+                      setBrushColor(value)
+                      setPickerOpen(false)
+                    }}
+                    style={{ backgroundColor: value }}
+                    className={cn(
+                      "flex aspect-square items-center justify-center rounded-md outline-none",
+                      "ring-1 ring-black/15 ring-inset dark:ring-white/20",
+                      "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                    )}
+                  >
+                    {currentColor === value && (
+                      <HugeiconsIcon
+                        icon={Tick02Icon}
+                        className={cn(
+                          "size-3.5",
+                          needsDarkTick(value) ? "text-black" : "text-white"
+                        )}
+                        strokeWidth={2.5}
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
 
-            {recent.length > 0 && (
-              <>
-                <div className="h-px bg-border" />
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">
+              {recent.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t pt-2">
+                  <span className="text-[11px] font-medium text-muted-foreground">
                     Recent
                   </span>
-                  <div
-                    role="radiogroup"
-                    aria-label="Recent colours"
-                    className="grid grid-cols-5 gap-1.5"
-                  >
+                  <div className="grid grid-cols-5 gap-1.5">
                     {recent.map((color) => (
-                      <Swatch
+                      <button
                         key={color}
-                        color={color}
-                        label={color}
-                        selected={currentColor === color}
-                        onSelect={() => setBrushColor(color)}
-                      />
+                        type="button"
+                        aria-label={color}
+                        onClick={() => {
+                          setBrushColor(color)
+                          setPickerOpen(false)
+                        }}
+                        style={{ backgroundColor: color }}
+                        className={cn(
+                          "flex aspect-square items-center justify-center rounded-md outline-none",
+                          "ring-1 ring-black/15 ring-inset dark:ring-white/20",
+                          "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                        )}
+                      >
+                        {currentColor === color && (
+                          <HugeiconsIcon
+                            icon={Tick02Icon}
+                            className={cn(
+                              "size-3.5",
+                              needsDarkTick(color) ? "text-black" : "text-white"
+                            )}
+                            strokeWidth={2.5}
+                          />
+                        )}
+                      </button>
                     ))}
                   </div>
                 </div>
-              </>
-            )}
+              )}
 
-            <div className="h-px bg-border" />
-
-            <div className="flex items-center gap-1.5">
-              <HexColorInput
-                prefixed
-                color={brushColor}
-                onChange={setBrushColor}
-                aria-label="Hex color"
-                className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30"
-              />
-              <Button
-                variant="outline"
-                size="icon-lg"
-                aria-label="Pick a colour from the canvas"
-                onClick={() => {
-                  // The popover sits over the thing you are trying to click.
-                  setPickerOpen(false)
-                  setTool("eyedropper")
-                }}
+              <button
+                type="button"
+                aria-expanded={showCustom}
+                onClick={() => setShowCustom((v) => !v)}
+                className="flex items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
               >
-                <HugeiconsIcon icon={DropperIcon} strokeWidth={1.8} />
-              </Button>
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  className={cn(
+                    "size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
+                    showCustom && "rotate-180"
+                  )}
+                  strokeWidth={1.8}
+                />
+                Custom
+              </button>
+
+              {showCustom && (
+                <HexColorPicker color={brushColor} onChange={setBrushColor} />
+              )}
             </div>
-
-            <button
-              type="button"
-              aria-expanded={showCustom}
-              onClick={() => setShowCustom((v) => !v)}
-              className="flex items-center gap-1 rounded-md text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
-            >
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
-                className={cn(
-                  "size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
-                  showCustom && "rotate-180"
-                )}
-                strokeWidth={1.8}
-              />
-              Custom
-            </button>
-
-            {showCustom && (
-              <HexColorPicker color={brushColor} onChange={setBrushColor} />
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
+          </PopoverContent>
+        </Popover>
+      </div>
 
       <div className="my-2 h-px w-6 bg-border" />
 
-      <div role="radiogroup" aria-label="Brush size" className="flex flex-col gap-1">
+      <div data-tour="brush-size" role="radiogroup" aria-label="Brush size" className="flex flex-col gap-1">
         {BRUSH_SIZES.map((size, i) => (
           <Tooltip key={size}>
             <TooltipTrigger

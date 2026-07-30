@@ -9,6 +9,7 @@ import {
   Film01Icon,
   GhostIcon,
   Gif01Icon,
+  HelpCircleIcon,
   ImageAdd01Icon,
   Loading03Icon,
   Logout01Icon,
@@ -186,6 +187,7 @@ export function WorkshopHeader() {
       <div className="h-4 w-px bg-border" />
 
       <input
+        data-tour="project-title"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         aria-label="Animation title"
@@ -202,6 +204,7 @@ export function WorkshopHeader() {
         )}
       >
         <SelectTrigger
+          data-tour="stage-size"
           aria-label="Canvas size"
           className="min-w-0 overflow-hidden max-lg:max-w-40 [&>span:first-child]:truncate"
         >
@@ -226,8 +229,24 @@ export function WorkshopHeader() {
         )}
 
         {/* A shortcut sheet is no use without a keyboard. */}
-        <div className="hidden lg:block">
+        <div className="hidden items-center gap-1 lg:flex">
           <HotkeysMenu />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-lg"
+                  aria-label="Take product tour"
+                  onClick={() => window.dispatchEvent(new CustomEvent("flipghost:start-tour"))}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={1.8} />
+                </Button>
+              }
+            />
+            <TooltipContent side="bottom">Product tour</TooltipContent>
+          </Tooltip>
         </div>
 
         <div className="h-4 w-px bg-border max-lg:hidden" />
@@ -237,6 +256,7 @@ export function WorkshopHeader() {
             <TooltipTrigger
               render={
                 <Button
+                  data-tour="cloud-save"
                   variant="outline"
                   size="lg"
                   disabled={cloudStatus === "saving"}
@@ -290,6 +310,7 @@ export function WorkshopHeader() {
               <TooltipTrigger
                 render={
                   <Button
+                    data-tour="import-image"
                     variant="outline"
                     size="lg"
                     aria-label="Import image"
@@ -336,6 +357,7 @@ export function WorkshopHeader() {
                 <PopoverTrigger
                   render={
                     <Button
+                      data-tour="export"
                       variant="outline"
                       size="lg"
                       aria-label="Export options"

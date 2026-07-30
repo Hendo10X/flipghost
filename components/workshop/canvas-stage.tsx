@@ -496,6 +496,7 @@ export function CanvasStage() {
             to negative offsets, where scrolling cannot reach it. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
+            data-tour="canvas"
             className="relative shrink-0 overflow-hidden rounded-xl bg-white shadow-md ring-1 ring-black/10"
             style={{ width: displayWidth, height: displayHeight }}
           >
