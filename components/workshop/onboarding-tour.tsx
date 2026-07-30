@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useState } from "react"
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
@@ -10,6 +10,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { cn } from "@/lib/utils"
+import { useFlipbook } from "@/lib/flipbook/store"
 import { Button } from "@/components/ui/button"
 
 const STORAGE_KEY = "flipghost:tour-completed:v1"
@@ -95,8 +96,13 @@ interface TargetRect {
 }
 
 export function OnboardingTour() {
-  const [isOpen, setIsOpen] = useState(false)
-  const [currentStep, setCurrentStep] = useState(0)
+  const tourOpen = useFlipbook((s) => s.tourOpen)
+  const currentStep = useFlipbook((s) => s.tourStep)
+  const startTour = useFlipbook((s) => s.startTour)
+  const nextTourStep = useFlipbook((s) => s.nextTourStep)
+  const prevTourStep = useFlipbook((s) => s.prevTourStep)
+  const closeTour = useFlipbook((s) => s.closeTour)
+
   const [targetRect, setTargetRect] = useState<TargetRect | null>(null)
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number }>({
     top: 0,
@@ -109,7 +115,7 @@ export function OnboardingTour() {
     if (!step) return
     const el = document.querySelector(step.target)
     if (!el) {
-      setTargetRect(null)
+      setTargetRect((prev) => (prev === null ? prev : null))
       return
     }
 
@@ -122,7 +128,18 @@ export function OnboardingTour() {
       height: rect.height + padding * 2,
     }
 
-    setTargetRect(paddedRect)
+    setTargetRect((prev) => {
+      if (
+        prev &&
+        prev.top === paddedRect.top &&
+        prev.left === paddedRect.left &&
+        prev.width === paddedRect.width &&
+        prev.height === paddedRect.height
+      ) {
+        return prev
+      }
+      return paddedRect
+    })
 
     // Calculate popover coordinates based on position preference and viewport bounds
     const popoverWidth = 320
@@ -161,7 +178,10 @@ export function OnboardingTour() {
     left = Math.max(20, Math.min(left, maxLeft))
     top = Math.max(20, Math.min(top, maxTop))
 
-    setPopoverPos({ top, left })
+    setPopoverPos((prev) => {
+      if (prev?.top === top && prev?.left === left) return prev
+      return { top, left }
+    })
   }, [step])
 
   // Check if tour has been completed before auto-triggering on first visit
@@ -171,30 +191,24 @@ export function OnboardingTour() {
       if (!completed) {
         // Small delay to ensure DOM layout has rendered
         const timer = setTimeout(() => {
-          setIsOpen(true)
-          setCurrentStep(0)
+          startTour()
         }, 800)
         return () => clearTimeout(timer)
       }
     } catch {
       // Storage unavailable
     }
-  }, [])
+  }, [startTour])
 
   // Listen for manual trigger from header help button
   useEffect(() => {
-    function handleStart() {
-      setIsOpen(true)
-      setCurrentStep(0)
-    }
-
-    window.addEventListener("flipghost:start-tour", handleStart)
-    return () => window.removeEventListener("flipghost:start-tour", handleStart)
-  }, [])
+    window.addEventListener("flipghost:start-tour", startTour)
+    return () => window.removeEventListener("flipghost:start-tour", startTour)
+  }, [startTour])
 
   // Update target rect on window resize or step change
-  useEffect(() => {
-    if (!isOpen) return
+  useLayoutEffect(() => {
+    if (!tourOpen) return
     updatePosition()
 
     window.addEventListener("resize", updatePosition)
@@ -204,45 +218,39 @@ export function OnboardingTour() {
       window.removeEventListener("resize", updatePosition)
       window.removeEventListener("scroll", updatePosition, true)
     }
-  }, [isOpen, currentStep, updatePosition])
+  }, [tourOpen, currentStep, updatePosition])
 
   // Keyboard navigation
   useEffect(() => {
-    if (!isOpen) return
+    if (!tourOpen) return
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault()
-        handleClose()
+        closeTour()
       } else if (e.key === "ArrowRight") {
         e.preventDefault()
-        handleNext()
+        nextTourStep(TOUR_STEPS.length)
       } else if (e.key === "ArrowLeft") {
         e.preventDefault()
-        handleBack()
+        prevTourStep()
       }
     }
 
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [isOpen, currentStep])
+  }, [tourOpen, currentStep, nextTourStep, prevTourStep, closeTour])
 
   function handleNext() {
-    if (currentStep < TOUR_STEPS.length - 1) {
-      setCurrentStep((prev) => prev + 1)
-    } else {
-      handleClose()
-    }
+    nextTourStep(TOUR_STEPS.length)
   }
 
   function handleBack() {
-    if (currentStep > 0) {
-      setCurrentStep((prev) => prev - 1)
-    }
+    prevTourStep()
   }
 
   function handleClose() {
-    setIsOpen(false)
+    closeTour()
     try {
       window.localStorage.setItem(STORAGE_KEY, "true")
     } catch {
@@ -250,7 +258,7 @@ export function OnboardingTour() {
     }
   }
 
-  if (!isOpen || !step) return null
+  if (!tourOpen || !step) return null
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden select-none">

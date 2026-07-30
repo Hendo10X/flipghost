@@ -17,8 +17,10 @@ export function useControlledState<T, Rest extends any[] = []>(
     value !== undefined ? value : (defaultValue as T),
   );
 
-  React.useEffect(() => {
-    if (value !== undefined) setInternalState(value);
+  React.useLayoutEffect(() => {
+    if (value !== undefined) {
+      setInternalState((prev) => (prev === value ? prev : value));
+    }
   }, [value]);
 
   const setState = React.useCallback(

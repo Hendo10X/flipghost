@@ -78,6 +78,7 @@ export function WorkshopHeader() {
   const requestImport = useFlipbook((s) => s.requestImport)
   const projectId = useFlipbook((s) => s.projectId)
   const cloudStatus = useFlipbook((s) => s.cloudStatus)
+  const startTour = useFlipbook((s) => s.startTour)
   const { data: session } = useSession()
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -238,7 +239,7 @@ export function WorkshopHeader() {
                   variant="ghost"
                   size="icon-lg"
                   aria-label="Take product tour"
-                  onClick={() => window.dispatchEvent(new CustomEvent("flipghost:start-tour"))}
+                  onClick={startTour}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <HugeiconsIcon icon={HelpCircleIcon} strokeWidth={1.8} />
