@@ -17,10 +17,13 @@ export function useControlledState<T, Rest extends any[] = []>(
     value !== undefined ? value : (defaultValue as T),
   );
 
-  const prevValueRef = React.useRef(value);
-  if (value !== undefined && value !== prevValueRef.current) {
-    prevValueRef.current = value;
-    setInternalState(value);
+  const [prevValue, setPrevValue] = React.useState<T | undefined>(value);
+
+  if (value !== prevValue) {
+    setPrevValue(value);
+    if (value !== undefined) {
+      setInternalState(value);
+    }
   }
 
   const setState = React.useCallback(
