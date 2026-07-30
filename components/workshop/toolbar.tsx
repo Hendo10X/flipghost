@@ -5,7 +5,6 @@ import {
   ArrowDown01Icon,
   BrushCleaningIcon,
   Cursor01Icon,
-  DropperIcon,
   EraserIcon,
   PencilEdit02Icon,
   Redo02Icon,
@@ -13,7 +12,7 @@ import {
   Undo02Icon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { HexColorInput, HexColorPicker } from "react-colorful"
+import { HexColorPicker } from "react-colorful"
 
 import {
   loadRecentColors,
@@ -79,47 +78,7 @@ function needsDarkTick(hex: string) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
 }
 
-function Swatch({
-  color,
-  label,
-  selected,
-  onSelect,
-}: {
-  color: string
-  label: string
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      aria-label={label}
-      data-cuelume-toggle
-      onClick={onSelect}
-      style={{ backgroundColor: color }}
-      className={cn(
-        "flex aspect-square items-center justify-center rounded-md outline-none",
-        // Same inset hairline the trigger swatch uses, and what keeps White
-        // visible against a light popover.
-        "ring-1 ring-black/15 ring-inset dark:ring-white/20",
-        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-      )}
-    >
-      {selected && (
-        <HugeiconsIcon
-          icon={Tick02Icon}
-          className={cn(
-            "size-3.5",
-            needsDarkTick(color) ? "text-black" : "text-white"
-          )}
-          strokeWidth={2.5}
-        />
-      )}
-    </button>
-  )
-}
+
 
 export function Toolbar() {
   const tool = useFlipbook((s) => s.tool)

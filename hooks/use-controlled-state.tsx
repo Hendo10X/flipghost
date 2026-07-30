@@ -17,11 +17,11 @@ export function useControlledState<T, Rest extends any[] = []>(
     value !== undefined ? value : (defaultValue as T),
   );
 
-  React.useLayoutEffect(() => {
-    if (value !== undefined) {
-      setInternalState((prev) => (prev === value ? prev : value));
-    }
-  }, [value]);
+  const prevValueRef = React.useRef(value);
+  if (value !== undefined && value !== prevValueRef.current) {
+    prevValueRef.current = value;
+    setInternalState(value);
+  }
 
   const setState = React.useCallback(
     (next: T, ...args: Rest) => {

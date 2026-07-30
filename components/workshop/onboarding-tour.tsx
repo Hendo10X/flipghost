@@ -209,12 +209,16 @@ export function OnboardingTour() {
   // Update target rect on window resize or step change
   useLayoutEffect(() => {
     if (!tourOpen) return
-    updatePosition()
 
     window.addEventListener("resize", updatePosition)
     window.addEventListener("scroll", updatePosition, true)
 
+    const frameId = requestAnimationFrame(() => {
+      updatePosition()
+    })
+
     return () => {
+      cancelAnimationFrame(frameId)
       window.removeEventListener("resize", updatePosition)
       window.removeEventListener("scroll", updatePosition, true)
     }
