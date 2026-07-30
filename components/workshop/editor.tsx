@@ -211,6 +211,7 @@ export function Editor({
       const target = e.target as HTMLElement | null
       if (target?.closest("input, textarea, [contenteditable=true]")) return
 
+      if (!e.key) return
       const s = useFlipbook.getState()
       const key = e.key.toLowerCase()
 

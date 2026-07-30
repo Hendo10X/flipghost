@@ -128,7 +128,7 @@ export function formatHotkey(key: string): string {
 
 /** Whether a pressed key is acceptable as a binding. */
 export function isBindableKey(e: KeyboardEvent): boolean {
-  if (e.ctrlKey || e.metaKey || e.altKey) return false
+  if (!e.key || e.ctrlKey || e.metaKey || e.altKey) return false
   const key = e.key.toLowerCase()
   if (["shift", "control", "alt", "meta"].includes(key)) return false
   return key === " " || key.startsWith("arrow") || key.length === 1

@@ -74,6 +74,7 @@ export function HotkeysMenu() {
       e.preventDefault()
       e.stopPropagation()
 
+      if (!e.key) return
       const key = e.key.toLowerCase()
       if (key === "escape") {
         setRecording(null)
