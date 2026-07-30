@@ -241,12 +241,21 @@ export function Toolbar() {
               common errand, and it was sitting underneath a 176px saturation
               square. react-colorful is 200px wide by default, so the w-44 on it
               is what holds it inside this column. */}
-          <div className="flex w-44 flex-col gap-3 [&_.react-colorful]:h-44 [&_.react-colorful]:w-44">
+  <div
+  className="
+    flex w-35 flex-col gap-2 overflow-hidden
+    [&_.react-colorful]:w-full
+    [&_.react-colorful]:h-33
+    [&_.react-colorful]:max-w-full
+    [&_.react-colorful__saturation]:rounded-md
+    [&_.react-colorful__hue]:w-full
+  "
+>
             <div
-              role="radiogroup"
-              aria-label="Palette"
-              className="grid grid-cols-5 gap-1.5"
-            >
+  role="radiogroup"
+  aria-label="Palette"
+  className="grid grid-cols-5 gap-1"
+>
               {PALETTE.map(({ name, value }) => (
                 <Swatch
                   key={value}
@@ -262,7 +271,7 @@ export function Toolbar() {
               <>
                 <div className="h-px bg-border" />
                 <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-[13px] text-muted-foreground">
                     Recent
                   </span>
                   <div
