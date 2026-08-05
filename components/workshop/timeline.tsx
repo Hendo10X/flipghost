@@ -278,6 +278,7 @@ export function Timeline() {
           <TooltipTrigger
             render={
               <Button
+                data-tour="onion-skin"
                 variant="ghost"
                 size="sm"
                 aria-pressed={onionSkin}

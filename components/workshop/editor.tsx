@@ -22,6 +22,7 @@ import {
 import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
+import { OnboardingTour } from "@/components/workshop/onboarding-tour"
 import { SmallScreenNotice } from "@/components/workshop/small-screen-notice"
 import { WorkshopHeader } from "@/components/workshop/header"
 import { Timeline } from "@/components/workshop/timeline"
@@ -242,6 +243,7 @@ export function Editor({
         target?.closest("input, textarea, [contenteditable=true]")
       )
 
+      if (!e.key) return
       const s = useFlipbook.getState()
       const key = e.key.toLowerCase()
       const code = e.code.toLowerCase()
@@ -320,6 +322,7 @@ export function Editor({
   return (
     <TooltipProvider>
       <SmallScreenNotice />
+      <OnboardingTour />
       {/* overflow-hidden so the only thing that ever scrolls sideways is the
           frame strip in the timeline. Everything above it has to fit. */}
       <div className="hidden h-dvh flex-col overflow-hidden md:flex">

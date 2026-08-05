@@ -276,6 +276,13 @@ interface FlipbookState extends ProjectSnapshot {
   past: HistoryEntry[]
   future: HistoryEntry[]
 
+  tourOpen: boolean
+  tourStep: number
+  startTour: () => void
+  nextTourStep: (maxSteps?: number) => void
+  prevTourStep: () => void
+  closeTour: () => void
+
   setProjectId: (id: string | null) => void
   setCloudStatus: (status: "idle" | "saving" | "saved" | "error") => void
   setStagePreset: (id: string) => void
@@ -353,6 +360,27 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   cloudStatus: "idle",
   past: [],
   future: [],
+  tourOpen: false,
+  tourStep: 0,
+
+  startTour: () => set({ tourOpen: true, tourStep: 0 }),
+  nextTourStep: (maxSteps = 9) =>
+    set((s) => {
+      if (s.tourStep < maxSteps - 1) {
+        return { tourStep: s.tourStep + 1 }
+      }
+      try {
+        window.localStorage.setItem("flipghost:tour-completed:v1", "true")
+      } catch {}
+      return { tourOpen: false }
+    }),
+  prevTourStep: () => set((s) => ({ tourStep: Math.max(0, s.tourStep - 1) })),
+  closeTour: () => {
+    try {
+      window.localStorage.setItem("flipghost:tour-completed:v1", "true")
+    } catch {}
+    set({ tourOpen: false })
+  },
 
   setProjectId: (projectId) => set({ projectId }),
   setCloudStatus: (cloudStatus) => set({ cloudStatus }),
