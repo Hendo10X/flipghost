@@ -18,8 +18,11 @@ import {
 } from "@/lib/hotkeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import "./hotkey-key.css"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 
 function Kbd({ children, className }: React.ComponentProps<"kbd">) {
   return (
@@ -31,29 +34,6 @@ function Kbd({ children, className }: React.ComponentProps<"kbd">) {
     >
       {children}
     </kbd>
-  )
-}
-
-/**
- * A pressable key chip. Uses the Algolia button treatment in neutral tones,
- * so it reads dark on a light theme and white on a dark one.
- */
-function KeyButton({
-  children,
-  recording,
-  ...props
-}: React.ComponentProps<"button"> & { recording?: boolean }) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        "hotkey-key inline-flex h-6 min-w-7 cursor-pointer items-center justify-center rounded-md bg-primary px-2 font-mono text-[11px] font-medium whitespace-nowrap text-primary-foreground transition-[transform,box-shadow] duration-150 ease-out outline-none select-none hover:-translate-y-0.5 active:translate-y-0.5",
-        recording && "italic opacity-80"
-      )}
-      {...props}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -134,15 +114,23 @@ export function HotkeysMenu() {
               className="flex items-center justify-between gap-3 py-1"
             >
               <span className="text-xs text-muted-foreground">{label}</span>
-              <KeyButton
+              <Button
+                type="button"
+                variant="hotkey"
+                size="sm"
+                className={cn(
+                  "min-w-7 rounded-md px-2 font-mono text-[11px]",
+                  recording && "italic opacity-80"
+                )}
                 aria-label={`Change shortcut for ${label}`}
-                recording={recording === action}
                 onClick={() =>
-                  setRecording((current) => (current === action ? null : action))
+                  setRecording((current) =>
+                    current === action ? null : action
+                  )
                 }
               >
                 {recording === action ? "Press…" : formatHotkey(keys[action])}
-              </KeyButton>
+              </Button>
             </div>
           ))}
         </div>

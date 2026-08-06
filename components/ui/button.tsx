@@ -5,21 +5,21 @@ import { cn } from "@/lib/utils"
 import "@/components/animata/button/algolia-blue-button.css"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 cubic-bezier(0.16,1,0.3,1) outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "inline-flex shrink-0 items-center justify-center rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium whitespace-nowrap transition-[color,background-color,border-color,box-shadow,transform,opacity] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default:
-          "algolia-blue-btn bg-linear-to-r from-sky-500 to-blue-600 bg-clip-border text-white hover:-translate-y-0.5 active:translate-y-0",
+        default: "border-0 text-white",
+        hotkey: "border-0 text-primary-foreground",
         outline:
-          "border-border hover:bg-muted/70 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
+          "border-border hover:bg-muted/70 hover:text-foreground active:not-aria-[haspopup]:scale-[0.98] aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:not-aria-[haspopup]:scale-[0.98] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "hover:bg-muted hover:text-foreground active:not-aria-[haspopup]:scale-[0.98] aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 active:not-aria-[haspopup]:scale-[0.98] dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        link: "text-primary underline-offset-4 hover:underline active:not-aria-[haspopup]:scale-[0.98]",
       },
       size: {
         default:
@@ -51,16 +51,45 @@ function Button({
   variant = "default",
   size = "default",
   nativeButton,
+  children,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  const buttonClassName = cn(buttonVariants({ variant, size, className }))
+  const buttonProps = {
+    ...props,
+    "data-slot": "button",
+    // A custom `render` (e.g. a Link) usually isn't a native <button>.
+    nativeButton: nativeButton ?? props.render === undefined,
+  }
+
+  const hasDepth = variant === "default" || variant === "hotkey"
+
+  if (!hasDepth) {
+    return (
+      <ButtonPrimitive {...buttonProps} className={buttonClassName}>
+        {children}
+      </ButtonPrimitive>
+    )
+  }
+
   return (
     <ButtonPrimitive
-      data-slot="button"
-      // A custom `render` (e.g. a Link) usually isn't a native <button>.
-      nativeButton={nativeButton ?? props.render === undefined}
-      className={cn(buttonVariants({ variant, size, className }))}
-      {...props}
-    />
+      {...buttonProps}
+      className={cn(
+        buttonClassName,
+        "button-lift group/button relative h-auto p-0"
+      )}
+    >
+      <span
+        className={cn(
+          buttonClassName,
+          "button-lift-surface pointer-events-none relative z-10",
+          variant === "hotkey" && "button-lift-surface-hotkey"
+        )}
+      >
+        {children}
+      </span>
+    </ButtonPrimitive>
   )
 }
 
