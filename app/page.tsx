@@ -74,8 +74,8 @@ export default function Page() {
               </div>
 
               {/* Tablet and up, where the editor actually opens. */}
-              <div className="hidden items-center gap-3 md:flex">
-                <Button render={<Link href="/signup" />} size="xl" className="px-4">
+              <div className="hidden items-center gap-4 md:grid md:grid-cols-2 md:w-full">
+                <Button render={<Link href="/signup" />} size="xl" className="px-6">
                   Get started
                 </Button>
                 <Button
