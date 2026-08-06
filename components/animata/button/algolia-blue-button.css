@@ -2,6 +2,7 @@
   .button-lift {
     --button-depth: 4px;
     --button-depth-shadow: #0752b8;
+    
     background: transparent;
     box-shadow: none;
   }
