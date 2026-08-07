@@ -49,6 +49,10 @@ export default function SignInPage() {
       setPending(false)
       return
     }
+    try {
+      window.localStorage.removeItem("flipghost:is-new-signup")
+      window.localStorage.setItem("flipghost:tour-completed:v1", "true")
+    } catch {}
     router.push("/projects")
   }
 

@@ -1,10 +1,11 @@
-import type { Frame } from "./store"
+import type { AudioTrack, Frame } from "./store"
 
 export interface SaveProjectInput {
   projectId: string | null
   title: string
   fps: number
   stagePresetId: string
+  audioTrack: AudioTrack | null
   frames: Frame[]
 }
 
@@ -19,6 +20,7 @@ export async function saveProjectToCloud(
       title: input.title,
       fps: input.fps,
       stagePresetId: input.stagePresetId,
+      audioTrack: input.audioTrack,
       frames: input.frames.map((frame, index) => ({
         orderIndex: index,
         json: frame.json ? JSON.stringify(frame.json) : null,

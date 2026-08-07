@@ -70,6 +70,7 @@ export const projects = pgTable("projects", {
   title: varchar("title", { length: 255 }).notNull().default("Untitled Animation"),
   fps: integer("fps").notNull().default(12),
   resolution: varchar("resolution", { length: 32 }).notNull().default("1080x1080"),
+  audioTrack: text("audio_track"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 })
 

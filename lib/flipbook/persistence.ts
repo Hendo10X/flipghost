@@ -1,6 +1,6 @@
 import { del, get, set } from "idb-keyval"
 
-import type { Frame } from "./store"
+import type { AudioTrack, Frame } from "./store"
 
 const LOCAL_KEY = "flipghost:local"
 
@@ -17,6 +17,7 @@ export interface ProjectSnapshot {
   stagePresetId: string
   brushColor: string
   brushSize: number
+  audioTrack: AudioTrack | null
 }
 
 export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
@@ -32,6 +33,7 @@ export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
     stagePresetId: state.stagePresetId,
     brushColor: state.brushColor,
     brushSize: state.brushSize,
+    audioTrack: state.audioTrack,
   }
 }
 

@@ -106,7 +106,8 @@ export function WorkshopHeader() {
       const runners: Record<ExportFormat, ExportRunner> = {
         gif: (frames, fps, size, onProgress) =>
           exportGif(frames, fps, size, onProgress, transparent),
-        mp4: exportMp4,
+        mp4: (frames, fps, size, onProgress) =>
+          exportMp4(frames, fps, size, onProgress, state.audioTrack),
         apng: (frames, fps, size, onProgress) =>
           exportApng(frames, fps, size, onProgress, transparent),
       }

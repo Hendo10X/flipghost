@@ -1,5 +1,5 @@
 import { removeBackground } from "./remove-background"
-import type { Frame } from "./store"
+import type { AudioTrack, Frame } from "./store"
 
 export type ExportFormat = "gif" | "mp4" | "apng"
 
@@ -198,7 +198,8 @@ export async function exportMp4(
   frames: Frame[],
   fps: number,
   size: ExportSize,
-  onProgress: OnProgress
+  onProgress: OnProgress,
+  audioTrack?: AudioTrack | null
 ): Promise<Blob> {
   // Fetching the ffmpeg core (~30MB) and rendering frames are independent.
   const [{ instance: ffmpeg, fetchFile }, canvases] = await Promise.all([
@@ -231,22 +232,52 @@ export async function exportMp4(
       })
     }
 
-    await ffmpeg.exec([
+    const ffmpegArgs: string[] = [
       "-framerate",
       String(fps),
       "-i",
       "frame%04d.png",
+    ]
+
+    const hasAudio = Boolean(audioTrack && !audioTrack.muted && audioTrack.dataUrl)
+    if (hasAudio && audioTrack) {
+      try {
+        const audioBlob = await (await fetch(audioTrack.dataUrl)).blob()
+        await ffmpeg.writeFile("input_audio", await fetchFile(audioBlob))
+
+        if (audioTrack.offset > 0) {
+          ffmpegArgs.push("-ss", String(audioTrack.offset))
+        }
+        if (audioTrack.startFrame > 0) {
+          const delaySec = audioTrack.startFrame / fps
+          ffmpegArgs.push("-itsoffset", String(delaySec))
+        }
+        ffmpegArgs.push("-i", "input_audio")
+      } catch (err) {
+        console.warn("Could not write audio to ffmpeg:", err)
+      }
+    }
+
+    const totalDurationSec = frames.length / fps
+
+    ffmpegArgs.push(
       "-c:v",
       "libx264",
       "-pix_fmt",
       "yuv420p",
-      // libx264 + yuv420p require even dimensions.
       "-vf",
       "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-      "-movflags",
-      "+faststart",
-      "out.mp4",
-    ])
+      "-t",
+      String(totalDurationSec)
+    )
+
+    if (hasAudio) {
+      ffmpegArgs.push("-c:a", "aac", "-b:a", "192k")
+    }
+
+    ffmpegArgs.push("-movflags", "+faststart", "out.mp4")
+
+    await ffmpeg.exec(ffmpegArgs)
 
     const data = await ffmpeg.readFile("out.mp4")
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data

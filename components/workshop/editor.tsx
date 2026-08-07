@@ -11,7 +11,7 @@ import {
   snapshotChanged,
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
-import { getStagePreset, useFlipbook, type Frame } from "@/lib/flipbook/store"
+import { getStagePreset, useFlipbook, type AudioTrack, type Frame } from "@/lib/flipbook/store"
 import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
@@ -26,6 +26,7 @@ export interface InitialProject {
   title: string
   fps: number
   stagePresetId: string
+  audioTrack?: AudioTrack | null
   frames: Frame[]
 }
 
@@ -54,6 +55,7 @@ export function Editor({
           title: initialProject.title,
           fps: initialProject.fps,
           stagePresetId: initialProject.stagePresetId,
+          audioTrack: initialProject.audioTrack ?? null,
           frames: initialProject.frames,
           currentId: initialProject.frames[0].id,
           past: [],
@@ -149,6 +151,7 @@ export function Editor({
               title: s.title,
               fps: s.fps,
               stagePresetId: s.stagePresetId,
+              audioTrack: s.audioTrack,
               frames: s.frames,
             })
             savedVersion = version
@@ -173,7 +176,8 @@ export function Editor({
           next.frames !== previous.frames ||
           next.title !== previous.title ||
           next.fps !== previous.fps ||
-          next.stagePresetId !== previous.stagePresetId
+          next.stagePresetId !== previous.stagePresetId ||
+          next.audioTrack !== previous.audioTrack
         ) {
           contentVersion++
         }
