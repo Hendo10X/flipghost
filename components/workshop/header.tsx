@@ -149,6 +149,7 @@ export function WorkshopHeader() {
         title: state.title,
         fps: state.fps,
         stagePresetId: state.stagePresetId,
+        audioTrack: state.audioTrack,
         frames: state.frames,
       })
       state.setProjectId(id)
