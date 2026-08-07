@@ -25,11 +25,6 @@ const VIEWPORT_PAD = 48
 
 /**
  * One ghosted neighbouring frame layered under the drawing surface.
- *
- * The snapshot's alpha is used as a CSS mask over a flat fill, which tints the
- * strokes without touching the pixels. Doing this on an offscreen canvas
- * instead would mean a decode and a PNG re-encode per ghost every time the
- * frame changes, which is felt as lag while stepping along the timeline.
  */
 function OnionLayer({
   dataUrl,
@@ -56,12 +51,6 @@ const toHex = (n: number) => n.toString(16).padStart(2, "0")
 /**
  * The colour of the pixel under a pointer event, or null where there is
  * nothing drawn.
- *
- * Reads the rendered canvas rather than hit-testing objects, so it picks up
- * what you can actually see: the colour where two strokes overlap, or the
- * softer edge of a pressure stroke, rather than whatever object happens to be
- * on top. Viewport coordinates go through the retina scale because the backing
- * store is that many times larger than the CSS box.
  */
 function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
   const point = canvas.getViewportPoint(e)
@@ -71,19 +60,207 @@ function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
 
   try {
     const [r, g, b, a] = canvas.getContext().getImageData(x, y, 1, 1).data
-    // Anything faint enough to be more paper than paint is not worth taking.
     if (a < 16) return null
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`
   } catch {
-    // getImageData throws on a tainted canvas. Nothing here is cross-origin,
-    // but a failed sample must not take the workshop down with it.
     return null
   }
 }
 
 /**
- * A ring the size of the brush, drawn white over black so it stays visible on
- * both bare paper and dark strokes. Sized in screen pixels, so it tracks zoom.
+ * Performs flood fill starting at pointer position.
+ * Returns a new offscreen canvas element with filled pixel data, or null if no change.
+ */
+function floodFillCanvas(
+  canvas: Canvas,
+  e: TPointerEvent,
+  fillColorHex: string,
+  stageWidth: number,
+  stageHeight: number
+): HTMLCanvasElement | null {
+  const pointer = canvas.getScenePoint(e)
+  const startX = Math.round(pointer.x)
+  const startY = Math.round(pointer.y)
+
+  if (startX < 0 || startX >= stageWidth || startY < 0 || startY >= stageHeight) return null
+
+  const zoom = canvas.getZoom()
+  const multiplier = zoom > 0 ? 1 / zoom : 1
+
+  let renderedEl: HTMLCanvasElement
+  try {
+    renderedEl = canvas.toCanvasElement(multiplier)
+  } catch {
+    return null
+  }
+
+  const ctx = renderedEl.getContext("2d")
+  if (!ctx) return null
+
+  const width = renderedEl.width
+  const height = renderedEl.height
+
+  let imgData: ImageData
+  try {
+    imgData = ctx.getImageData(0, 0, width, height)
+  } catch {
+    return null
+  }
+  const data = imgData.data
+
+  const clampedX = Math.max(0, Math.min(width - 1, Math.floor((startX / stageWidth) * width)))
+  const clampedY = Math.max(0, Math.min(height - 1, Math.floor((startY / stageHeight) * height)))
+
+  const startIndex = (clampedY * width + clampedX) * 4
+  const startR = data[startIndex]
+  const startG = data[startIndex + 1]
+  const startB = data[startIndex + 2]
+  const startA = data[startIndex + 3]
+
+  const fillR = parseInt(fillColorHex.slice(1, 3), 16)
+  const fillG = parseInt(fillColorHex.slice(3, 5), 16)
+  const fillB = parseInt(fillColorHex.slice(5, 7), 16)
+  const fillA = 255
+
+  // Early exit if clicking on a pixel that already matches the fill color
+  if (
+    startA > 240 &&
+    Math.abs(startR - fillR) < 4 &&
+    Math.abs(startG - fillG) < 4 &&
+    Math.abs(startB - fillB) < 4
+  ) {
+    return null
+  }
+
+  const isStartTransparent = startA < 16
+
+  const colorMatch = (idx: number) => {
+    const a = data[idx + 3]
+    if (isStartTransparent) {
+      return a < 128
+    }
+    const r = data[idx]
+    const g = data[idx + 1]
+    const b = data[idx + 2]
+
+    return (
+      Math.abs(r - startR) <= 32 &&
+      Math.abs(g - startG) <= 32 &&
+      Math.abs(b - startB) <= 32 &&
+      Math.abs(a - startA) <= 32
+    )
+  }
+
+  const fillCanvas = document.createElement("canvas")
+  fillCanvas.width = width
+  fillCanvas.height = height
+  const fillCtx = fillCanvas.getContext("2d")
+  if (!fillCtx) return null
+
+  const newImgData = fillCtx.createImageData(width, height)
+  const newData = newImgData.data
+
+  const totalPixels = width * height
+  const visited = new Uint8Array(totalPixels)
+  const filled = new Uint8Array(totalPixels)
+  const queue = new Int32Array(totalPixels)
+  let qHead = 0
+  let qTail = 0
+
+  const startPos = clampedY * width + clampedX
+  queue[qTail++] = startPos
+  visited[startPos] = 1
+
+  while (qHead < qTail) {
+    const pos = queue[qHead++]
+    const px = pos % width
+    const py = (pos / width) | 0
+    const idx = pos * 4
+
+    newData[idx] = fillR
+    newData[idx + 1] = fillG
+    newData[idx + 2] = fillB
+    newData[idx + 3] = fillA
+    filled[pos] = 1
+
+    if (px > 0) {
+      const nPos = pos - 1
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (px < width - 1) {
+      const nPos = pos + 1
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (py > 0) {
+      const nPos = pos - width
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (py < height - 1) {
+      const nPos = pos + width
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+  }
+
+  if (qTail === 0) return null
+
+  // Dilation pass to smoothly cover stroke anti-aliasing edges
+  let currentBoundary: number[] = []
+  for (let i = 0; i < qTail; i++) {
+    currentBoundary.push(queue[i])
+  }
+
+  const DILATION_RADIUS = 3
+  for (let pass = 0; pass < DILATION_RADIUS; pass++) {
+    const nextBoundary: number[] = []
+    for (let i = 0; i < currentBoundary.length; i++) {
+      const pos = currentBoundary[i]
+      const px = pos % width
+      const py = (pos / width) | 0
+
+      const ns: number[] = []
+      if (px > 0) ns.push(pos - 1)
+      if (px < width - 1) ns.push(pos + 1)
+      if (py > 0) ns.push(pos - width)
+      if (py < height - 1) ns.push(pos + width)
+      if (px > 0 && py > 0) ns.push(pos - width - 1)
+      if (px < width - 1 && py > 0) ns.push(pos - width + 1)
+      if (px > 0 && py < height - 1) ns.push(pos + width - 1)
+      if (px < width - 1 && py < height - 1) ns.push(pos + width + 1)
+
+      for (let j = 0; j < ns.length; j++) {
+        const nPos = ns[j]
+        if (!filled[nPos]) {
+          filled[nPos] = 1
+          const nIdx = nPos * 4
+          newData[nIdx] = fillR
+          newData[nIdx + 1] = fillG
+          newData[nIdx + 2] = fillB
+          newData[nIdx + 3] = fillA
+          nextBoundary.push(nPos)
+        }
+      }
+    }
+    currentBoundary = nextBoundary
+  }
+
+  fillCtx.putImageData(newImgData, 0, 0)
+  return fillCanvas
+}
+
+/**
+ * Ring brush cursor tracking size and scale.
  */
 function brushCursor(diameter: number) {
   const d = Math.max(4, Math.min(128, diameter))
@@ -123,7 +300,6 @@ export function CanvasStage() {
   const pendingImport = useFlipbook((s) => s.pendingImport)
 
   const stage = getStagePreset(stagePresetId)
-  // Scale that fits the stage in the viewport; zoom multiplies it.
   const fitScale = Math.min(
     (container.width - VIEWPORT_PAD) / stage.width,
     (container.height - VIEWPORT_PAD) / stage.height
@@ -134,8 +310,6 @@ export function CanvasStage() {
 
   const currentIndex = frames.findIndex((f) => f.id === currentId)
 
-  // Nearest neighbours first, so ghost opacity falls off with distance.
-  // Guard on currentIndex: a -1 would make the slices below select wildly.
   const showOnion = onionSkin && !playing && currentIndex >= 0
   const beforeFrames = showOnion
     ? frames.slice(Math.max(0, currentIndex - onionBefore), currentIndex).reverse()
@@ -152,7 +326,7 @@ export function CanvasStage() {
     let canvas: Canvas | null = null
 
     async function init() {
-      const [{ Canvas }, { PressureBrush }] = await Promise.all([
+      const [{ Canvas, FabricImage }, { PressureBrush }] = await Promise.all([
         import("fabric"),
         import("@/lib/flipbook/pressure-brush"),
       ])
@@ -164,8 +338,6 @@ export function CanvasStage() {
         perPixelTargetFind: true,
         targetFindTolerance: 12,
         enableRetinaScaling: true,
-        // Fabric defaults to mouse + touch events, which carry no pressure or
-        // pointer type. Pointer events are what let a stylus draw as a stylus.
         enablePointerEvents: true,
       })
       canvas.freeDrawingBrush = new PressureBrush(canvas)
@@ -191,10 +363,8 @@ export function CanvasStage() {
         commit()
       })
 
-      // Moving/scaling/rotating with the select tool.
       canvas.on("object:modified", () => commit())
 
-      // Stroke eraser: drag over strokes to remove them.
       let erasing = false
       let erasedAny = false
 
@@ -208,17 +378,69 @@ export function CanvasStage() {
         }
       }
 
-      // Eyedropper: one click takes the colour under the cursor.
+      // Eyedropper tool
       canvas.on("mouse:down", (opt) => {
         if (!canvas || useFlipbook.getState().tool !== "eyedropper") return
         const color = sampleColorAt(canvas, opt.e)
-        // Bare paper reads as transparent, and "transparent" is not a brush
-        // colour. Clicking an empty patch should do nothing rather than hand
-        // back something invisible to draw with.
         if (color) useFlipbook.getState().setBrushColor(color)
         useFlipbook.getState().setTool("brush")
       })
 
+      // Paint Bucket tool
+      canvas.on("mouse:down", async (opt) => {
+        if (!canvas || useFlipbook.getState().tool !== "bucket") return
+        const state = useFlipbook.getState()
+        const stagePreset = getStagePreset(state.stagePresetId)
+
+        const filledCanvas = floodFillCanvas(
+          canvas,
+          opt.e,
+          state.brushColor,
+          stagePreset.width,
+          stagePreset.height
+        )
+
+        if (filledCanvas) {
+          const zoom = canvas.getZoom()
+          const multiplier = zoom > 0 ? 1 / zoom : 1
+
+          const currentSnapshot = canvas.toCanvasElement(multiplier)
+
+          const composite = document.createElement("canvas")
+          composite.width = filledCanvas.width
+          composite.height = filledCanvas.height
+          const compCtx = composite.getContext("2d")!
+
+          compCtx.drawImage(currentSnapshot, 0, 0)
+          compCtx.drawImage(filledCanvas, 0, 0)
+
+          canvas.clear()
+          const img = new FabricImage(composite, {
+            originX: "left",
+            originY: "top",
+            left: 0,
+            top: 0,
+            scaleX: stagePreset.width / composite.width,
+            scaleY: stagePreset.height / composite.height,
+            selectable: false,
+            evented: false,
+            hasControls: false,
+            hasBorders: false,
+            lockMovementX: true,
+            lockMovementY: true,
+            lockScalingX: true,
+            lockScalingY: true,
+            lockRotation: true,
+          })
+
+          canvas.add(img)
+          canvas.requestRenderAll()
+          commit()
+        }
+        state.setTool("brush")
+      })
+
+      // Eraser tool
       canvas.on("mouse:down", (opt) => {
         if (useFlipbook.getState().tool !== "eraser") return
         erasing = true
@@ -248,7 +470,7 @@ export function CanvasStage() {
     }
   }, [])
 
-  // --- Responsive sizing: fit the stage into the container ---
+  // --- Responsive sizing ---
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -266,13 +488,12 @@ export function CanvasStage() {
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || displayWidth === 0 || displayHeight === 0) return
-    // Resizing the element (rather than CSS-scaling it) keeps strokes crisp.
     canvas.setDimensions({ width: displayWidth, height: displayHeight })
     canvas.setZoom(displayWidth / stage.width)
     canvas.requestRenderAll()
   }, [displayWidth, displayHeight, stage.width, ready])
 
-  // --- Ctrl/Cmd + wheel zooms; a plain wheel scrolls (pans) the viewport ---
+  // --- Zoom controls via Ctrl/Cmd + wheel ---
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -286,7 +507,7 @@ export function CanvasStage() {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
-  // --- Place an imported image onto the current frame ---
+  // --- Image insertion ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || !pendingImport) return
@@ -325,22 +546,14 @@ export function CanvasStage() {
     }
   }, [pendingImport, ready])
 
-  // --- Tool & brush settings ---
+  // --- Tool & brush state ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
     if (tool === "brush") {
       canvas.isDrawingMode = true
       canvas.selection = false
-    } else if (tool === "eraser") {
-      canvas.isDrawingMode = false
-      canvas.selection = false
-      canvas.defaultCursor = "crosshair"
-      canvas.hoverCursor = "crosshair"
-    } else if (tool === "eyedropper") {
-      // Its own branch rather than falling into the select case below, which
-      // would arm a marquee and offer a move cursor for a mode whose whole job
-      // is one click.
+    } else if (tool === "eraser" || tool === "eyedropper" || tool === "bucket") {
       canvas.isDrawingMode = false
       canvas.selection = false
       canvas.defaultCursor = "crosshair"
@@ -364,15 +577,14 @@ export function CanvasStage() {
     }
   }, [tool, brushColor, brushSize, ready])
 
-  // --- Brush cursor: a ring matching the stroke it will lay down ---
+  // --- Dynamic brush cursor ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || tool !== "brush" || scale <= 0) return
-    // brushSize is in stage units, so scale it into screen pixels.
     canvas.freeDrawingCursor = brushCursor(brushSize * scale)
   }, [tool, brushSize, scale, ready])
 
-  // --- Select-tool keyboard: delete selection, escape to deselect ---
+  // --- Selection keyboard navigation ---
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const canvas = fabricRef.current
@@ -398,20 +610,11 @@ export function CanvasStage() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [ready])
 
-  // --- Load the current frame into the canvas ---
+  // --- Frame JSON loader ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
 
-    /**
-     * Stepping frames faster than a frame enlivens starts a second load before
-     * the first has finished, and loadFromJSON does its `clear()` and `add()`
-     * *inside* the promise it returns. So a flag checked after the await is
-     * already too late: the stale artwork is on the canvas by then, and the
-     * next stroke commits it into whichever frame is now selected, merging the
-     * two for good. The signal makes the superseded load reject before it can
-     * touch anything.
-     */
     const controller = new AbortController()
 
     async function load() {
@@ -425,8 +628,6 @@ export function CanvasStage() {
             signal: controller.signal,
           })
         } catch {
-          // Aborted, or an unreadable frame. Either way a newer load owns the
-          // canvas now and this one must not draw over it.
           return
         }
         canvas.forEachObject((obj) => {
@@ -437,7 +638,6 @@ export function CanvasStage() {
         })
       }
       canvas.requestRenderAll()
-      // Undo/redo drops the cached snapshot; rebuild it from the canvas.
       if (frame && frame.dataUrl === null && frame.json !== null) {
         state.setFrameSnapshot(
           frame.id,
@@ -455,7 +655,7 @@ export function CanvasStage() {
     }
   }, [currentId, revision, ready])
 
-  // --- Playback loop: drives the preview <img> directly, outside React ---
+  // --- Playback loop ---
   useEffect(() => {
     if (!playing) return
     const state = useFlipbook.getState()
@@ -486,14 +686,8 @@ export function CanvasStage() {
   }, [playing, fps])
 
   return (
-    // min-w-0: without it a flex child refuses to shrink below its content,
-    // which would push the stage out past the viewport instead of fitting it.
     <div className="relative flex min-h-0 min-w-0 flex-1">
       <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
-        {/* Sized to the stage (w-max/h-max) but never smaller than the
-            viewport, so centring applies only when there is room to spare.
-            Plain justify-center would push the overflow of a zoomed-in stage
-            to negative offsets, where scrolling cannot reach it. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
             data-tour="canvas"
