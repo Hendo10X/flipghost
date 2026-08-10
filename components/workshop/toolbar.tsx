@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import {
   ArrowDown01Icon,
-  BrushCleaningIcon,
   Cursor01Icon,
+  Delete04Icon,
   DropperIcon,
   EraserIcon,
   PencilEdit02Icon,
@@ -224,7 +224,7 @@ export function Toolbar() {
                     className={cn(tool === "eyedropper" && "bg-muted")}
                   >
                     <span
-                      className="size-4 rounded-full ring-1 ring-black/15 ring-inset dark:ring-white/20"
+                      className="size-4 rounded-sm ring-1 ring-black/15 ring-inset dark:ring-white/20"
                       style={{ backgroundColor: brushColor }}
                     />
                   </Button>
@@ -386,7 +386,7 @@ export function Toolbar() {
               onClick={clearFrame}
               className="text-muted-foreground"
             >
-              <HugeiconsIcon icon={BrushCleaningIcon} strokeWidth={1.8} />
+              <HugeiconsIcon icon={Delete04Icon} strokeWidth={1.8} />
             </Button>
           }
         />
