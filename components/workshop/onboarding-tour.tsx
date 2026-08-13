@@ -108,6 +108,14 @@ export function OnboardingTour() {
     top: 0,
     left: 0,
   })
+  const [isDesktop, setIsDesktop] = useState(true)
+
+  useEffect(() => {
+    setIsDesktop(window.innerWidth >= 1024)
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
 
   const step = TOUR_STEPS[currentStep]
 
@@ -186,6 +194,8 @@ export function OnboardingTour() {
 
   // Check if user is a new registrant before auto-triggering on first visit
   useEffect(() => {
+    if (typeof window === "undefined" || window.innerWidth < 1024) return
+
     try {
       const isNewSignup = window.localStorage.getItem("flipghost:is-new-signup") === "true"
       const completed = window.localStorage.getItem(STORAGE_KEY) === "true"
@@ -264,7 +274,7 @@ export function OnboardingTour() {
     }
   }
 
-  if (!tourOpen || !step) return null
+  if (!isDesktop || !tourOpen || !step) return null
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden select-none">
