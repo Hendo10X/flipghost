@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   const framePayloads = body.frames as FramePayload[]
   const userId = session.user.id
   let projectId: string
+  let replacingFrames = false
 
   if (typeof body.projectId === "string" && body.projectId) {
     const updated = await db
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
     projectId = updated[0].id
-    await db.delete(frames).where(eq(frames.projectId, projectId))
+    replacingFrames = true
   } else {
     const created = await db
       .insert(projects)
@@ -72,14 +73,29 @@ export async function POST(request: Request) {
   // The frames table doubles as blob storage for the MVP: the Fabric JSON
   // lives in canvas_data_url and the PNG snapshot in thumbnail_url. Swap
   // these for S3/R2 object URLs later without changing the schema.
-  await db.insert(frames).values(
-    framePayloads.map((frame, index) => ({
-      projectId,
-      orderIndex: Number.isFinite(frame.orderIndex) ? frame.orderIndex : index,
-      canvasDataUrl: frame.json ?? null,
-      thumbnailUrl: frame.thumbnail ?? null,
-    }))
-  )
+  const rows = framePayloads.map((frame, index) => ({
+    projectId,
+    orderIndex: Number.isFinite(frame.orderIndex) ? frame.orderIndex : index,
+    canvasDataUrl: frame.json ?? null,
+    thumbnailUrl: frame.thumbnail ?? null,
+  }))
+
+  // Replacing a project's frames has to be atomic. This used to be a bare
+  // delete followed by a separate insert: if the insert then failed or timed
+  // out — likely, since it is one multi-megabyte statement of base64 PNGs —
+  // the delete had already committed and the project was left with zero
+  // frames. Permanent loss, on a save that fires every 1.5s. db.batch() runs
+  // both statements in a single transaction, so a failed insert rolls the
+  // delete back and the previous frames stay intact. A brand-new project has
+  // nothing to delete, so it just inserts.
+  if (replacingFrames) {
+    await db.batch([
+      db.delete(frames).where(eq(frames.projectId, projectId)),
+      db.insert(frames).values(rows),
+    ])
+  } else {
+    await db.insert(frames).values(rows)
+  }
 
   return Response.json({ id: projectId })
 }

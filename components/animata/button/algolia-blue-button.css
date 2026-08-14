@@ -1,32 +1,53 @@
 @layer components {
-  .algolia-blue-btn {
-    box-shadow:
-      0 2px 4px rgba(45, 35, 66, 0.3),
-      0 6px 12px -2px rgba(45, 35, 66, 0.25),
-      inset 0 -3px 0 rgba(58, 65, 111, 0.4);
-    will-change: transform, box-shadow;
-    transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  .button-lift {
+    --button-depth: 4px;
+    --button-depth-shadow: #0752b8;
+    
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .button-lift::after {
+    position: absolute;
+    inset: 0 0 calc(var(--button-depth) * -1) 0;
+    z-index: 0;
+    content: "";
+  }
+
+  .button-lift-surface {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    background: linear-gradient(135deg, #15a7ed 0%, #1769ee 100%);
+    box-shadow: 0 var(--button-depth) 0 var(--button-depth-shadow);
+    will-change: transform;
+    transition-property: transform, box-shadow;
+    transition-duration: 120ms;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .button-lift-surface-hotkey {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    --button-depth-shadow: color-mix(in oklab, var(--primary) 88%, black);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .algolia-blue-btn:hover {
-      box-shadow:
-        0 4px 8px rgba(45, 35, 66, 0.35),
-        0 8px 16px -2px rgba(45, 35, 66, 0.25),
-        inset 0 -3px 0 #3c4fe0;
+    .button-lift:hover .button-lift-surface {
+      transform: translateY(-1px);
+      box-shadow: 0 calc(var(--button-depth) + 1px) 0 var(--button-depth-shadow);
     }
   }
 
-  .algolia-blue-btn:focus-visible {
-    box-shadow:
-      inset 0 0 0 1.5px #3c4fe0,
-      0 2px 4px rgba(45, 35, 66, 0.3),
-      0 6px 12px -2px rgba(45, 35, 66, 0.25),
-      inset 0 -3px 0 #3c4fe0;
+  .button-lift:active .button-lift-surface {
+    transform: translateY(calc(var(--button-depth) - 1px));
+    box-shadow: 0 1px 0 var(--button-depth-shadow);
   }
 
-  .algolia-blue-btn:active {
-    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.2);
+  @media (prefers-reduced-motion: reduce) {
+    .button-lift-surface {
+      transition-duration: 0.01ms;
+    }
   }
 }
-

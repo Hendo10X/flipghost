@@ -260,7 +260,8 @@ function floodFillCanvas(
 }
 
 /**
- * Ring brush cursor tracking size and scale.
+ * A ring the size of the brush, drawn white over black so it stays visible on
+ * both bare paper and dark strokes. Sized in screen pixels, so it tracks zoom.
  */
 function brushCursor(diameter: number) {
   const d = Math.max(4, Math.min(128, diameter))
@@ -450,7 +451,6 @@ export function CanvasStage() {
         state.setTool("brush")
       })
 
-      // Eraser tool
       canvas.on("mouse:down", (opt) => {
         if (useFlipbook.getState().tool !== "eraser") return
         erasing = true
