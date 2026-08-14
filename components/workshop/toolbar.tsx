@@ -7,6 +7,7 @@ import {
   Cursor01Icon,
   DropperIcon,
   EraserIcon,
+  PaintBucketIcon,
   PencilEdit02Icon,
   Redo02Icon,
   Tick02Icon,
@@ -33,23 +34,14 @@ import {
 const BRUSH_SIZES = [4, 8, 16, 32] as const
 const DOT_CLASSES = ["size-1", "size-1.5", "size-2.5", "size-3.5"] as const
 
+// Paint Bucket added to the main tools list under Eraser
 const TOOLS: { tool: Tool; label: string; icon: typeof PencilEdit02Icon }[] = [
   { tool: "select", label: "Select (V)", icon: Cursor01Icon },
   { tool: "brush", label: "Brush (B)", icon: PencilEdit02Icon },
   { tool: "eraser", label: "Eraser (E)", icon: EraserIcon },
+  { tool: "bucket", label: "Paint Bucket", icon: PaintBucketIcon },
 ]
 
-/**
- * Ten presets, because dragging a saturation square to find plain red is a
- * silly way to spend a second you could have spent drawing. Fixed rather than
- * editable: a palette the user can add to is a palette they expect to still be
- * there tomorrow, and that means storing it per project and persisting it,
- * which is a real feature rather than a toolbar tweak.
- *
- * Ink is the store's default brush colour, so the palette shows a selection
- * the moment it opens rather than looking like nothing is chosen. Two rows of
- * five at w-44 lines the grid up with the picker above it.
- */
 const PALETTE = [
   { name: "Ink", value: "#1a1a1a" },
   { name: "White", value: "#ffffff" },
@@ -63,19 +55,10 @@ const PALETTE = [
   { name: "Pink", value: "#ec4899" },
 ] as const
 
-/**
- * Whether a tick drawn on this swatch should be black or white. A ring around
- * the selected swatch cannot work here: the grid is exactly as wide as the
- * picker above it, so a ring sitting outside the swatch would push past that
- * edge and knock the row out of line with everything else in the popover.
- * The mark has to live inside the swatch, which means it has to survive both
- * White and Ink.
- */
 function needsDarkTick(hex: string) {
   const r = parseInt(hex.slice(1, 3), 16)
   const g = parseInt(hex.slice(3, 5), 16)
   const b = parseInt(hex.slice(5, 7), 16)
-  // Rec. 601 luma: green reads far brighter to the eye than blue does.
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6
 }
 
@@ -101,8 +84,6 @@ function Swatch({
       style={{ backgroundColor: color }}
       className={cn(
         "flex aspect-square items-center justify-center rounded-md outline-none",
-        // Same inset hairline the trigger swatch uses, and what keeps White
-        // visible against a light popover.
         "ring-1 ring-black/15 ring-inset dark:ring-white/20",
         "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       )}
@@ -151,20 +132,10 @@ export function Toolbar() {
     }
   }, [])
 
-  /**
-   * Recorded when the popover closes, not as the colour changes: dragging the
-   * picker fires a change per pointer move, and every muddy shade you passed
-   * through on the way is not a colour you chose. Presets are skipped — they
-   * are already one row up, and echoing them into Recent would push out the
-   * mixed colours this row exists to keep.
-   */
   function onPickerOpenChange(open: boolean) {
     setPickerOpen(open)
     if (open) {
-      // Coming back to the popover means choosing a colour some other way, so
-      // disarm the dropper. Otherwise it stays armed behind the popover and the
-      // next stroke you try to draw silently samples a colour instead.
-      if (tool === "eyedropper") setTool("brush")
+      if (tool === "eyedropper" || tool === "bucket") setTool("brush")
       return
     }
     setShowCustom(false)
@@ -177,10 +148,6 @@ export function Toolbar() {
   }
 
   return (
-    // Every control in here is icon-only, so they all grow to a 44px target
-    // together and the rail widens to hold them. Keyed off both a coarse
-    // pointer (a real tablet, at any width) and tablet widths (a desktop
-    // browser resized down, which reports a fine pointer).
     <aside className="flex w-12 flex-col items-center gap-1 border-r py-3 pointer-coarse:w-16 max-lg:w-16 pointer-coarse:[&_[data-slot=button]]:size-11 max-lg:[&_[data-slot=button]]:size-11">
       {TOOLS.map(({ tool: t, label, icon }) => (
         <Tooltip key={t}>
@@ -218,10 +185,9 @@ export function Toolbar() {
                     variant="ghost"
                     size="icon-lg"
                     aria-label="Brush color"
-                    // Sampling closes the popover, so without this the rail
-                    // would show no active tool at all and the mode would be
-                    // invisible until you clicked something.
-                    className={cn(tool === "eyedropper" && "bg-muted")}
+                    className={cn(
+                      (tool === "eyedropper" || tool === "bucket") && "bg-muted"
+                    )}
                   >
                     <span
                       className="size-4 rounded-full ring-1 ring-black/15 ring-inset dark:ring-white/20"
@@ -233,29 +199,29 @@ export function Toolbar() {
             }
           />
           <TooltipContent side="right">
-            {tool === "eyedropper" ? "Click the canvas to pick" : "Brush color"}
+            {tool === "eyedropper"
+              ? "Click the canvas to pick"
+              : tool === "bucket"
+              ? "Click the canvas to fill"
+              : "Brush color"}
           </TooltipContent>
         </Tooltip>
         <PopoverContent side="right" align="start" className="w-auto">
-          {/* Presets first and the picker folded away: reaching for red is the
-              common errand, and it was sitting underneath a 176px saturation
-              square. react-colorful is 200px wide by default, so the w-44 on it
-              is what holds it inside this column. */}
-  <div
-  className="
-    flex w-35 flex-col gap-2 overflow-hidden
-    [&_.react-colorful]:w-full
-    [&_.react-colorful]:h-33
-    [&_.react-colorful]:max-w-full
-    [&_.react-colorful__saturation]:rounded-md
-    [&_.react-colorful__hue]:w-full
-  "
->
+          <div
+            className="
+              flex w-35 flex-col gap-2 overflow-hidden
+              [&_.react-colorful]:w-full
+              [&_.react-colorful]:h-33
+              [&_.react-colorful]:max-w-full
+              [&_.react-colorful__saturation]:rounded-md
+              [&_.react-colorful__hue]:w-full
+            "
+          >
             <div
-  role="radiogroup"
-  aria-label="Palette"
-  className="grid grid-cols-5 gap-1"
->
+              role="radiogroup"
+              aria-label="Palette"
+              className="grid grid-cols-5 gap-1"
+            >
               {PALETTE.map(({ name, value }) => (
                 <Swatch
                   key={value}
@@ -303,18 +269,24 @@ export function Toolbar() {
                 aria-label="Hex color"
                 className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-input/30"
               />
-              <Button
-                variant="outline"
-                size="icon-lg"
-                aria-label="Pick a colour from the canvas"
-                onClick={() => {
-                  // The popover sits over the thing you are trying to click.
-                  setPickerOpen(false)
-                  setTool("eyedropper")
-                }}
-              >
-                <HugeiconsIcon icon={DropperIcon} strokeWidth={1.8} />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant={tool === "eyedropper" ? "secondary" : "outline"}
+                      size="icon-lg"
+                      aria-label="Eye Drop"
+                      onClick={() => {
+                        setPickerOpen(false)
+                        setTool("eyedropper")
+                      }}
+                    >
+                      <HugeiconsIcon icon={DropperIcon} strokeWidth={1.8} />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="top">Eye Drop</TooltipContent>
+              </Tooltip>
             </div>
 
             <button

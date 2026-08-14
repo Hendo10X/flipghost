@@ -25,11 +25,6 @@ const VIEWPORT_PAD = 48
 
 /**
  * One ghosted neighbouring frame layered under the drawing surface.
- *
- * The snapshot's alpha is used as a CSS mask over a flat fill, which tints the
- * strokes without touching the pixels. Doing this on an offscreen canvas
- * instead would mean a decode and a PNG re-encode per ghost every time the
- * frame changes, which is felt as lag while stepping along the timeline.
  */
 function OnionLayer({
   dataUrl,
@@ -56,12 +51,6 @@ const toHex = (n: number) => n.toString(16).padStart(2, "0")
 /**
  * The colour of the pixel under a pointer event, or null where there is
  * nothing drawn.
- *
- * Reads the rendered canvas rather than hit-testing objects, so it picks up
- * what you can actually see: the colour where two strokes overlap, or the
- * softer edge of a pressure stroke, rather than whatever object happens to be
- * on top. Viewport coordinates go through the retina scale because the backing
- * store is that many times larger than the CSS box.
  */
 function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
   const point = canvas.getViewportPoint(e)
@@ -71,12 +60,9 @@ function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
 
   try {
     const [r, g, b, a] = canvas.getContext().getImageData(x, y, 1, 1).data
-    // Anything faint enough to be more paper than paint is not worth taking.
     if (a < 16) return null
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`
   } catch {
-    // getImageData throws on a tainted canvas. Nothing here is cross-origin,
-    // but a failed sample must not take the workshop down with it.
     return null
   }
 }
@@ -315,7 +301,6 @@ export function CanvasStage() {
   const pendingImport = useFlipbook((s) => s.pendingImport)
 
   const stage = getStagePreset(stagePresetId)
-  // Scale that fits the stage in the viewport; zoom multiplies it.
   const fitScale = Math.min(
     (container.width - VIEWPORT_PAD) / stage.width,
     (container.height - VIEWPORT_PAD) / stage.height
@@ -326,8 +311,6 @@ export function CanvasStage() {
 
   const currentIndex = frames.findIndex((f) => f.id === currentId)
 
-  // Nearest neighbours first, so ghost opacity falls off with distance.
-  // Guard on currentIndex: a -1 would make the slices below select wildly.
   const showOnion = onionSkin && !playing && currentIndex >= 0
   const beforeFrames = showOnion
     ? frames.slice(Math.max(0, currentIndex - onionBefore), currentIndex).reverse()
@@ -356,8 +339,6 @@ export function CanvasStage() {
         perPixelTargetFind: true,
         targetFindTolerance: 12,
         enableRetinaScaling: true,
-        // Fabric defaults to mouse + touch events, which carry no pressure or
-        // pointer type. Pointer events are what let a stylus draw as a stylus.
         enablePointerEvents: true,
       })
       canvas.freeDrawingBrush = new PressureBrush(canvas)
@@ -383,10 +364,8 @@ export function CanvasStage() {
         commit()
       })
 
-      // Moving/scaling/rotating with the select tool.
       canvas.on("object:modified", () => commit())
 
-      // Stroke eraser: drag over strokes to remove them.
       let erasing = false
       let erasedAny = false
 
@@ -400,13 +379,10 @@ export function CanvasStage() {
         }
       }
 
-      // Eyedropper: one click takes the colour under the cursor.
+      // Eyedropper tool
       canvas.on("mouse:down", (opt) => {
         if (!canvas || useFlipbook.getState().tool !== "eyedropper") return
         const color = sampleColorAt(canvas, opt.e)
-        // Bare paper reads as transparent, and "transparent" is not a brush
-        // colour. Clicking an empty patch should do nothing rather than hand
-        // back something invisible to draw with.
         if (color) useFlipbook.getState().setBrushColor(color)
         useFlipbook.getState().setTool("brush")
       })
@@ -504,7 +480,7 @@ export function CanvasStage() {
     }
   }, [])
 
-  // --- Responsive sizing: fit the stage into the container ---
+  // --- Responsive sizing ---
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -522,13 +498,12 @@ export function CanvasStage() {
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || displayWidth === 0 || displayHeight === 0) return
-    // Resizing the element (rather than CSS-scaling it) keeps strokes crisp.
     canvas.setDimensions({ width: displayWidth, height: displayHeight })
     canvas.setZoom(displayWidth / stage.width)
     canvas.requestRenderAll()
   }, [displayWidth, displayHeight, stage.width, ready])
 
-  // --- Ctrl/Cmd + wheel zooms; a plain wheel scrolls (pans) the viewport ---
+  // --- Zoom controls via Ctrl/Cmd + wheel ---
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -542,7 +517,7 @@ export function CanvasStage() {
     return () => el.removeEventListener("wheel", onWheel)
   }, [])
 
-  // --- Place an imported image onto the current frame ---
+  // --- Image insertion ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || !pendingImport) return
@@ -581,7 +556,7 @@ export function CanvasStage() {
     }
   }, [pendingImport, ready])
 
-  // --- Tool & brush settings ---
+  // --- Tool & brush state ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
@@ -612,15 +587,14 @@ export function CanvasStage() {
     }
   }, [tool, brushColor, brushSize, ready])
 
-  // --- Brush cursor: a ring matching the stroke it will lay down ---
+  // --- Dynamic brush cursor ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready || tool !== "brush" || scale <= 0) return
-    // brushSize is in stage units, so scale it into screen pixels.
     canvas.freeDrawingCursor = brushCursor(brushSize * scale)
   }, [tool, brushSize, scale, ready])
 
-  // --- Select-tool keyboard: delete selection, escape to deselect ---
+  // --- Selection keyboard navigation ---
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const canvas = fabricRef.current
@@ -646,20 +620,11 @@ export function CanvasStage() {
     return () => window.removeEventListener("keydown", onKeyDown)
   }, [ready])
 
-  // --- Load the current frame into the canvas ---
+  // --- Frame JSON loader ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
 
-    /**
-     * Stepping frames faster than a frame enlivens starts a second load before
-     * the first has finished, and loadFromJSON does its `clear()` and `add()`
-     * *inside* the promise it returns. So a flag checked after the await is
-     * already too late: the stale artwork is on the canvas by then, and the
-     * next stroke commits it into whichever frame is now selected, merging the
-     * two for good. The signal makes the superseded load reject before it can
-     * touch anything.
-     */
     const controller = new AbortController()
 
     async function load() {
@@ -673,8 +638,6 @@ export function CanvasStage() {
             signal: controller.signal,
           })
         } catch {
-          // Aborted, or an unreadable frame. Either way a newer load owns the
-          // canvas now and this one must not draw over it.
           return
         }
         canvas.forEachObject((obj) => {
@@ -685,7 +648,6 @@ export function CanvasStage() {
         })
       }
       canvas.requestRenderAll()
-      // Undo/redo drops the cached snapshot; rebuild it from the canvas.
       if (frame && frame.dataUrl === null && frame.json !== null) {
         state.setFrameSnapshot(
           frame.id,
@@ -703,7 +665,7 @@ export function CanvasStage() {
     }
   }, [currentId, revision, ready])
 
-  // --- Playback loop: drives the preview <img> directly, outside React ---
+  // --- Playback loop ---
   useEffect(() => {
     if (!playing) return
     const state = useFlipbook.getState()
@@ -734,14 +696,8 @@ export function CanvasStage() {
   }, [playing, fps])
 
   return (
-    // min-w-0: without it a flex child refuses to shrink below its content,
-    // which would push the stage out past the viewport instead of fitting it.
     <div className="relative flex min-h-0 min-w-0 flex-1">
       <div ref={containerRef} className="flex-1 overflow-auto bg-muted/40">
-        {/* Sized to the stage (w-max/h-max) but never smaller than the
-            viewport, so centring applies only when there is room to spare.
-            Plain justify-center would push the overflow of a zoomed-in stage
-            to negative offsets, where scrolling cannot reach it. */}
         <div className="flex h-max min-h-full w-max min-w-full items-center justify-center p-6">
           <div
             data-tour="canvas"

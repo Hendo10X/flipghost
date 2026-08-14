@@ -49,7 +49,7 @@ export function getStagePreset(id: string): StagePreset {
  * the toolbar rail for that reason — it lives in the colour popover, which is
  * where you are standing when you want it.
  */
-export type Tool = "brush" | "eraser" | "select" | "eyedropper"
+export type Tool = "brush" | "eraser" | "select" | "eyedropper" | "bucket"
 
 export type FrameJSON = Record<string, unknown>
 
