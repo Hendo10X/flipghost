@@ -401,39 +401,48 @@ export function CanvasStage() {
         )
 
         if (filledCanvas) {
-          const zoom = canvas.getZoom()
-          const multiplier = zoom > 0 ? 1 / zoom : 1
+          const existingFillImages = canvas
+            .getObjects()
+            .filter(
+              (obj) =>
+                obj.isType("Image", "image") || obj.type?.toLowerCase() === "image"
+            )
 
-          const currentSnapshot = canvas.toCanvasElement(multiplier)
+          const compositeCanvas = document.createElement("canvas")
+          compositeCanvas.width = filledCanvas.width
+          compositeCanvas.height = filledCanvas.height
+          const compCtx = compositeCanvas.getContext("2d")!
 
-          const composite = document.createElement("canvas")
-          composite.width = filledCanvas.width
-          composite.height = filledCanvas.height
-          const compCtx = composite.getContext("2d")!
+          existingFillImages.forEach((imgObj) => {
+            const el = (imgObj as any).getElement?.()
+            if (el) {
+              compCtx.drawImage(
+                el,
+                0,
+                0,
+                compositeCanvas.width,
+                compositeCanvas.height
+              )
+            }
+          })
 
-          compCtx.drawImage(currentSnapshot, 0, 0)
           compCtx.drawImage(filledCanvas, 0, 0)
 
-          canvas.clear()
-          const img = new FabricImage(composite, {
+          const src = compositeCanvas.toDataURL()
+          const img = new FabricImage(compositeCanvas, {
+            src,
             originX: "left",
             originY: "top",
             left: 0,
             top: 0,
-            scaleX: stagePreset.width / composite.width,
-            scaleY: stagePreset.height / composite.height,
-            selectable: false,
-            evented: false,
-            hasControls: false,
-            hasBorders: false,
-            lockMovementX: true,
-            lockMovementY: true,
-            lockScalingX: true,
-            lockScalingY: true,
-            lockRotation: true,
+            scaleX: stagePreset.width / compositeCanvas.width,
+            scaleY: stagePreset.height / compositeCanvas.height,
+            selectable: state.tool === "select",
+            perPixelTargetFind: true,
           })
 
-          canvas.add(img)
+          canvas.remove(...existingFillImages)
+          canvas.insertAt(0, img)
           canvas.requestRenderAll()
           commit()
         }
