@@ -68,7 +68,7 @@ function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
 }
 
 /**
- * Performs flood fill starting at pointer position.
+ * Performs flood fill starting at pointer position
  * Returns a new offscreen canvas element with filled pixel data, or null if no change.
  */
 function floodFillCanvas(
