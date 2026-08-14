@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { Canvas, TPointerEvent, TPointerEventInfo } from "fabric"
+import type { Canvas, FabricImage as FabricImageType, TPointerEvent, TPointerEventInfo } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -414,7 +414,8 @@ export function CanvasStage() {
           const compCtx = compositeCanvas.getContext("2d")!
 
           existingFillImages.forEach((imgObj) => {
-            const el = (imgObj as any).getElement?.()
+            const fabricImg = imgObj as FabricImageType
+            const el = fabricImg.getElement?.()
             if (el) {
               compCtx.drawImage(
                 el,
