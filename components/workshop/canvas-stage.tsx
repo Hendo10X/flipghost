@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import type { Canvas, TPointerEvent, TPointerEventInfo } from "fabric"
+import type { Canvas, FabricImage as FabricImageType, TPointerEvent, TPointerEventInfo } from "fabric"
 import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -82,6 +82,198 @@ function sampleColorAt(canvas: Canvas, e: TPointerEvent): string | null {
 }
 
 /**
+ * Performs flood fill starting at pointer position
+ * Returns a new offscreen canvas element with filled pixel data, or null if no change.
+ */
+function floodFillCanvas(
+  canvas: Canvas,
+  e: TPointerEvent,
+  fillColorHex: string,
+  stageWidth: number,
+  stageHeight: number
+): HTMLCanvasElement | null {
+  const pointer = canvas.getScenePoint(e)
+  const startX = Math.round(pointer.x)
+  const startY = Math.round(pointer.y)
+
+  if (startX < 0 || startX >= stageWidth || startY < 0 || startY >= stageHeight) return null
+
+  const zoom = canvas.getZoom()
+  const multiplier = zoom > 0 ? 1 / zoom : 1
+
+  let renderedEl: HTMLCanvasElement
+  try {
+    renderedEl = canvas.toCanvasElement(multiplier)
+  } catch {
+    return null
+  }
+
+  const ctx = renderedEl.getContext("2d")
+  if (!ctx) return null
+
+  const width = renderedEl.width
+  const height = renderedEl.height
+
+  let imgData: ImageData
+  try {
+    imgData = ctx.getImageData(0, 0, width, height)
+  } catch {
+    return null
+  }
+  const data = imgData.data
+
+  const clampedX = Math.max(0, Math.min(width - 1, Math.floor((startX / stageWidth) * width)))
+  const clampedY = Math.max(0, Math.min(height - 1, Math.floor((startY / stageHeight) * height)))
+
+  const startIndex = (clampedY * width + clampedX) * 4
+  const startR = data[startIndex]
+  const startG = data[startIndex + 1]
+  const startB = data[startIndex + 2]
+  const startA = data[startIndex + 3]
+
+  const fillR = parseInt(fillColorHex.slice(1, 3), 16)
+  const fillG = parseInt(fillColorHex.slice(3, 5), 16)
+  const fillB = parseInt(fillColorHex.slice(5, 7), 16)
+  const fillA = 255
+
+  // Early exit if clicking on a pixel that already matches the fill color
+  if (
+    startA > 240 &&
+    Math.abs(startR - fillR) < 4 &&
+    Math.abs(startG - fillG) < 4 &&
+    Math.abs(startB - fillB) < 4
+  ) {
+    return null
+  }
+
+  const isStartTransparent = startA < 16
+
+  const colorMatch = (idx: number) => {
+    const a = data[idx + 3]
+    if (isStartTransparent) {
+      return a < 128
+    }
+    const r = data[idx]
+    const g = data[idx + 1]
+    const b = data[idx + 2]
+
+    return (
+      Math.abs(r - startR) <= 32 &&
+      Math.abs(g - startG) <= 32 &&
+      Math.abs(b - startB) <= 32 &&
+      Math.abs(a - startA) <= 32
+    )
+  }
+
+  const fillCanvas = document.createElement("canvas")
+  fillCanvas.width = width
+  fillCanvas.height = height
+  const fillCtx = fillCanvas.getContext("2d")
+  if (!fillCtx) return null
+
+  const newImgData = fillCtx.createImageData(width, height)
+  const newData = newImgData.data
+
+  const totalPixels = width * height
+  const visited = new Uint8Array(totalPixels)
+  const filled = new Uint8Array(totalPixels)
+  const queue = new Int32Array(totalPixels)
+  let qHead = 0
+  let qTail = 0
+
+  const startPos = clampedY * width + clampedX
+  queue[qTail++] = startPos
+  visited[startPos] = 1
+
+  while (qHead < qTail) {
+    const pos = queue[qHead++]
+    const px = pos % width
+    const py = (pos / width) | 0
+    const idx = pos * 4
+
+    newData[idx] = fillR
+    newData[idx + 1] = fillG
+    newData[idx + 2] = fillB
+    newData[idx + 3] = fillA
+    filled[pos] = 1
+
+    if (px > 0) {
+      const nPos = pos - 1
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (px < width - 1) {
+      const nPos = pos + 1
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (py > 0) {
+      const nPos = pos - width
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+    if (py < height - 1) {
+      const nPos = pos + width
+      if (!visited[nPos]) {
+        visited[nPos] = 1
+        if (colorMatch(nPos * 4)) queue[qTail++] = nPos
+      }
+    }
+  }
+
+  if (qTail === 0) return null
+
+  // Dilation pass to smoothly cover stroke anti-aliasing edges
+  let currentBoundary: number[] = []
+  for (let i = 0; i < qTail; i++) {
+    currentBoundary.push(queue[i])
+  }
+
+  const DILATION_RADIUS = 3
+  for (let pass = 0; pass < DILATION_RADIUS; pass++) {
+    const nextBoundary: number[] = []
+    for (let i = 0; i < currentBoundary.length; i++) {
+      const pos = currentBoundary[i]
+      const px = pos % width
+      const py = (pos / width) | 0
+
+      const ns: number[] = []
+      if (px > 0) ns.push(pos - 1)
+      if (px < width - 1) ns.push(pos + 1)
+      if (py > 0) ns.push(pos - width)
+      if (py < height - 1) ns.push(pos + width)
+      if (px > 0 && py > 0) ns.push(pos - width - 1)
+      if (px < width - 1 && py > 0) ns.push(pos - width + 1)
+      if (px > 0 && py < height - 1) ns.push(pos + width - 1)
+      if (px < width - 1 && py < height - 1) ns.push(pos + width + 1)
+
+      for (let j = 0; j < ns.length; j++) {
+        const nPos = ns[j]
+        if (!filled[nPos]) {
+          filled[nPos] = 1
+          const nIdx = nPos * 4
+          newData[nIdx] = fillR
+          newData[nIdx + 1] = fillG
+          newData[nIdx + 2] = fillB
+          newData[nIdx + 3] = fillA
+          nextBoundary.push(nPos)
+        }
+      }
+    }
+    currentBoundary = nextBoundary
+  }
+
+  fillCtx.putImageData(newImgData, 0, 0)
+  return fillCanvas
+}
+
+/**
  * A ring the size of the brush, drawn white over black so it stays visible on
  * both bare paper and dark strokes. Sized in screen pixels, so it tracks zoom.
  */
@@ -152,7 +344,7 @@ export function CanvasStage() {
     let canvas: Canvas | null = null
 
     async function init() {
-      const [{ Canvas }, { PressureBrush }] = await Promise.all([
+      const [{ Canvas, FabricImage }, { PressureBrush }] = await Promise.all([
         import("fabric"),
         import("@/lib/flipbook/pressure-brush"),
       ])
@@ -217,6 +409,70 @@ export function CanvasStage() {
         // back something invisible to draw with.
         if (color) useFlipbook.getState().setBrushColor(color)
         useFlipbook.getState().setTool("brush")
+      })
+
+      // Paint Bucket tool
+      canvas.on("mouse:down", async (opt) => {
+        if (!canvas || useFlipbook.getState().tool !== "bucket") return
+        const state = useFlipbook.getState()
+        const stagePreset = getStagePreset(state.stagePresetId)
+
+        const filledCanvas = floodFillCanvas(
+          canvas,
+          opt.e,
+          state.brushColor,
+          stagePreset.width,
+          stagePreset.height
+        )
+
+        if (filledCanvas) {
+          const existingFillImages = canvas
+            .getObjects()
+            .filter(
+              (obj) =>
+                obj.isType("Image", "image") || obj.type?.toLowerCase() === "image"
+            )
+
+          const compositeCanvas = document.createElement("canvas")
+          compositeCanvas.width = filledCanvas.width
+          compositeCanvas.height = filledCanvas.height
+          const compCtx = compositeCanvas.getContext("2d")!
+
+          existingFillImages.forEach((imgObj) => {
+            const fabricImg = imgObj as FabricImageType
+            const el = fabricImg.getElement?.()
+            if (el) {
+              compCtx.drawImage(
+                el,
+                0,
+                0,
+                compositeCanvas.width,
+                compositeCanvas.height
+              )
+            }
+          })
+
+          compCtx.drawImage(filledCanvas, 0, 0)
+
+          const src = compositeCanvas.toDataURL()
+          const img = new FabricImage(compositeCanvas, {
+            src,
+            originX: "left",
+            originY: "top",
+            left: 0,
+            top: 0,
+            scaleX: stagePreset.width / compositeCanvas.width,
+            scaleY: stagePreset.height / compositeCanvas.height,
+            selectable: state.tool === "select",
+            perPixelTargetFind: true,
+          })
+
+          canvas.remove(...existingFillImages)
+          canvas.insertAt(0, img)
+          canvas.requestRenderAll()
+          commit()
+        }
+        state.setTool("brush")
       })
 
       canvas.on("mouse:down", (opt) => {
@@ -332,15 +588,7 @@ export function CanvasStage() {
     if (tool === "brush") {
       canvas.isDrawingMode = true
       canvas.selection = false
-    } else if (tool === "eraser") {
-      canvas.isDrawingMode = false
-      canvas.selection = false
-      canvas.defaultCursor = "crosshair"
-      canvas.hoverCursor = "crosshair"
-    } else if (tool === "eyedropper") {
-      // Its own branch rather than falling into the select case below, which
-      // would arm a marquee and offer a move cursor for a mode whose whole job
-      // is one click.
+    } else if (tool === "eraser" || tool === "eyedropper" || tool === "bucket") {
       canvas.isDrawingMode = false
       canvas.selection = false
       canvas.defaultCursor = "crosshair"
