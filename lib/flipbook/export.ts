@@ -1,7 +1,6 @@
-import { removeBackground } from "./remove-background"
-import type { Frame } from "./store"
+import type { AudioTrack, Frame } from "./store"
 
-export type ExportFormat = "gif" | "mp4" | "apng"
+export type ExportFormat = "gif" | "mp4"
 
 export interface ExportSize {
   width: number
@@ -16,22 +15,17 @@ export interface ExportProgress {
 
 type OnProgress = (progress: ExportProgress) => void
 
-/**
- * `opaque` reproduces the old white-fill behaviour (1-bit GIF and the legacy
- * export). `alpha` skips the fill and lets Fabric's transparent canvas carry
- * through, which is what APNG and WebP need. Both modes iterate the full
- * timeline on a cloned StaticCanvas; the live editor canvas is never touched.
- */
-type RenderMode = "opaque" | "alpha"
-
 /** The only background this app draws on. Keeps the colour in one place. */
 const PAPER = "#ffffff"
 
+/**
+ * Renders every frame's Fabric JSON onto a white canvas at the stage's
+ * logical resolution. Runs client-side only.
+ */
 async function renderFrames(
   frames: Frame[],
   { width, height }: ExportSize,
-  onProgress: OnProgress,
-  mode: RenderMode = "opaque"
+  onProgress: OnProgress
 ): Promise<HTMLCanvasElement[]> {
   const { StaticCanvas } = await import("fabric")
   const stage = new StaticCanvas(undefined, { width, height })
@@ -50,10 +44,8 @@ async function renderFrames(
       out.width = width
       out.height = height
       const ctx = out.getContext("2d")!
-      if (mode === "opaque") {
-        ctx.fillStyle = PAPER
-        ctx.fillRect(0, 0, width, height)
-      }
+      ctx.fillStyle = PAPER
+      ctx.fillRect(0, 0, width, height)
       ctx.drawImage(layer, 0, 0, width, height)
       rendered.push(out)
       onProgress({ value: ((i + 1) / frames.length) * 0.5, stage: "rendering" })
@@ -73,7 +65,7 @@ export async function exportGif(
 ): Promise<Blob> {
   const [{ GIFEncoder, quantize, applyPalette }, canvases] = await Promise.all([
     import("gifenc"),
-    renderFrames(frames, size, onProgress, "opaque"),
+    renderFrames(frames, size, onProgress),
   ])
 
   const gif = GIFEncoder()
@@ -93,9 +85,9 @@ export async function exportGif(
       palette,
       delay,
       // gifenc's 1-bit alpha: any pixel in the palette matching
-      // `transparentIndex` is treated as fully transparent. We reserved index
-      // 0 for white above; the user-visible background colour on the GIF
-      // path is white because `mode: "opaque"` already painted it.
+      // `transparentIndex` is treated as fully transparent. Index 0 is the
+      // white paper the opaque render painted, so a transparent GIF keys that
+      // colour out.
       transparent,
       transparentIndex: 0,
     })
@@ -109,60 +101,10 @@ export async function exportGif(
   return new Blob([gif.bytesView() as BufferSource], { type: "image/gif" })
 }
 
-export async function exportApng(
-  frames: Frame[],
-  fps: number,
-  size: ExportSize,
-  onProgress: OnProgress,
-  transparent = false
-): Promise<Blob> {
-  // upng-js ships as CommonJS (`module.exports = UPNG`), so under our ESM
-  // bundler the actual API lands on the default export. Destructuring the
-  // namespace directly yields `undefined` and the encode call below throws.
-  const upngMod = await import("upng-js")
-  const UPNG = upngMod.default
-  const canvases = await renderFrames(frames, size, onProgress, "alpha")
-
-  // The renderer left the paper colour in the alpha channel. The user
-  // toggled "transparent background", so soft-fade the paper out before
-  // encoding — strokes stay, paper goes.
-  const stripped = transparent
-    ? canvases.map((canvas) => removeBackground(canvas, { background: PAPER }))
-    : canvases
-
-  const delay = Math.round(1000 / fps)
-  // upng-js wants ArrayBuffer of raw RGBA bytes, not ImageData. Copy each
-  // frame's pixels into a freshly-allocated buffer because getImageData()
-  // returns a Uint8ClampedArray view onto the canvas's backing store, which
-  // UPNG.encode will read later — if a subsequent iteration mutates the
-  // canvas, the buffer would change underneath it.
-  const buffers: ArrayBuffer[] = stripped.map((canvas) => {
-    const ctx = canvas.getContext("2d")!
-    const { data } = ctx.getImageData(0, 0, size.width, size.height)
-    const out = new ArrayBuffer(data.byteLength)
-    new Uint8Array(out).set(data)
-    return out
-  })
-  const delays = new Array<number>(canvases.length).fill(delay)
-
-  onProgress({ value: 0.6, stage: "encoding" })
-
-  // cnum = 0 disables palette quantisation so alpha is preserved losslessly.
-  const tab = UPNG.encode(buffers, size.width, size.height, 0, delays, {
-    loop: 0,
-  })
-
-  onProgress({ value: 0.95, stage: "encoding" })
-
-  return new Blob([tab], { type: "image/apng" })
-}
-
 /**
- * MP4 (H.264) is, by spec, opaque: yuv420p has no alpha channel, so
- * "transparent background" is meaningless here. We always render with the
- * white paper fill, same as GIF. The Transparent toggle in the popover is
- * intentionally a no-op on this branch — the popover copy makes that clear
- * so users reach for APNG when they actually want alpha.
+ * MP4 (H.264) is, by spec, opaque: yuv420p has no alpha channel, so the
+ * "transparent background" toggle is ignored for MP4. GIF is where a
+ * transparent export actually lands.
  */
 const FFMPEG_CORE = "https://unpkg.com/@ffmpeg/core@0.12.10/dist/umd"
 
@@ -198,7 +140,8 @@ export async function exportMp4(
   frames: Frame[],
   fps: number,
   size: ExportSize,
-  onProgress: OnProgress
+  onProgress: OnProgress,
+  audioTrack?: AudioTrack | null
 ): Promise<Blob> {
   // Fetching the ffmpeg core (~30MB) and rendering frames are independent.
   const [{ instance: ffmpeg, fetchFile }, canvases] = await Promise.all([
@@ -231,22 +174,52 @@ export async function exportMp4(
       })
     }
 
-    await ffmpeg.exec([
+    const ffmpegArgs: string[] = [
       "-framerate",
       String(fps),
       "-i",
       "frame%04d.png",
+    ]
+
+    const hasAudio = Boolean(audioTrack && !audioTrack.muted && audioTrack.dataUrl)
+    if (hasAudio && audioTrack) {
+      try {
+        const audioBlob = await (await fetch(audioTrack.dataUrl)).blob()
+        await ffmpeg.writeFile("input_audio", await fetchFile(audioBlob))
+
+        if (audioTrack.offset > 0) {
+          ffmpegArgs.push("-ss", String(audioTrack.offset))
+        }
+        if (audioTrack.startFrame > 0) {
+          const delaySec = audioTrack.startFrame / fps
+          ffmpegArgs.push("-itsoffset", String(delaySec))
+        }
+        ffmpegArgs.push("-i", "input_audio")
+      } catch (err) {
+        console.warn("Could not write audio to ffmpeg:", err)
+      }
+    }
+
+    const totalDurationSec = frames.length / fps
+
+    ffmpegArgs.push(
       "-c:v",
       "libx264",
       "-pix_fmt",
       "yuv420p",
-      // libx264 + yuv420p require even dimensions.
       "-vf",
       "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-      "-movflags",
-      "+faststart",
-      "out.mp4",
-    ])
+      "-t",
+      String(totalDurationSec)
+    )
+
+    if (hasAudio) {
+      ffmpegArgs.push("-c:a", "aac", "-b:a", "192k")
+    }
+
+    ffmpegArgs.push("-movflags", "+faststart", "out.mp4")
+
+    await ffmpeg.exec(ffmpegArgs)
 
     const data = await ffmpeg.readFile("out.mp4")
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data

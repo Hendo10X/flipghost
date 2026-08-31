@@ -46,11 +46,19 @@ async function loadProject(
     .where(eq(frames.projectId, id))
     .orderBy(asc(frames.orderIndex))
 
+  let audioTrack = null
+  if (project.audioTrack) {
+    try {
+      audioTrack = JSON.parse(project.audioTrack)
+    } catch {}
+  }
+
   return {
     id: project.id,
     title: project.title,
     fps: project.fps,
     stagePresetId: project.resolution,
+    audioTrack,
     frames: frameRows.map((row) => ({
       id: crypto.randomUUID(),
       json: parseFrameJson(row.canvasDataUrl),

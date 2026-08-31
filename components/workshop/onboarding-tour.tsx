@@ -184,11 +184,12 @@ export function OnboardingTour() {
     })
   }, [step])
 
-  // Check if tour has been completed before auto-triggering on first visit
+  // Check if user is a new registrant before auto-triggering on first visit
   useEffect(() => {
     try {
-      const completed = window.localStorage.getItem(STORAGE_KEY)
-      if (!completed) {
+      const isNewSignup = window.localStorage.getItem("flipghost:is-new-signup") === "true"
+      const completed = window.localStorage.getItem(STORAGE_KEY) === "true"
+      if (isNewSignup && !completed) {
         // Small delay to ensure DOM layout has rendered
         const timer = setTimeout(() => {
           startTour()
@@ -257,6 +258,7 @@ export function OnboardingTour() {
     closeTour()
     try {
       window.localStorage.setItem(STORAGE_KEY, "true")
+      window.localStorage.removeItem("flipghost:is-new-signup")
     } catch {
       // Storage blocked
     }
