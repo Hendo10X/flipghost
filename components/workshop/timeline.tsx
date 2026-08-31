@@ -345,47 +345,75 @@ function AudioTrackBar({
   updateAudioTrack: (partial: Partial<AudioTrack>) => void
   frameStepPx: number
 }) {
-  const [isDragging, setIsDragging] = useState(false)
+  const [drag, setDrag] = useState<"move" | "trim" | null>(null)
   const [label, setLabel] = useState<string | null>(null)
   const startXRef = useRef(0)
   const startFrameRef = useRef(audioTrack.startFrame)
+  const startTrimRef = useRef(0)
 
-  // The clip is as wide as the audio is long — no trimming.
-  const audioSpanFrames = Math.max(1, Math.ceil(audioTrack.duration * fps))
+  // Active (played) length: the audio minus any start offset, capped by the
+  // right-edge trim (trimDuration). The clip is as wide as it actually plays.
+  const fullLength = Math.max(0, audioTrack.duration - audioTrack.offset)
+  const activeDuration = Math.min(
+    fullLength,
+    audioTrack.trimDuration ?? fullLength
+  )
+  const audioSpanFrames = Math.max(1, Math.ceil(activeDuration * fps))
   const trackWidthPx = Math.max(48, audioSpanFrames * frameStepPx - 8)
   const trackLeftPx = audioTrack.startFrame * frameStepPx
 
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const onMoveDown = (e: React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-    setIsDragging(true)
+    setDrag("move")
     startXRef.current = e.clientX
     startFrameRef.current = audioTrack.startFrame
   }
 
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging) return
-    const frameDelta = Math.round((e.clientX - startXRef.current) / frameStepPx)
-    const nextStartFrame = Math.max(0, startFrameRef.current + frameDelta)
-    if (nextStartFrame !== audioTrack.startFrame) {
-      updateAudioTrack({ startFrame: nextStartFrame })
-    }
-    setLabel(`Frame ${nextStartFrame + 1}`)
+  const onTrimDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    setDrag("trim")
+    startXRef.current = e.clientX
+    startTrimRef.current = activeDuration
   }
 
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!isDragging) return
+  const onMove = (e: React.PointerEvent) => {
+    if (!drag) return
+    const deltaX = e.clientX - startXRef.current
+    if (drag === "move") {
+      const nextStartFrame = Math.max(
+        0,
+        startFrameRef.current + Math.round(deltaX / frameStepPx)
+      )
+      if (nextStartFrame !== audioTrack.startFrame) {
+        updateAudioTrack({ startFrame: nextStartFrame })
+      }
+      setLabel(`Frame ${nextStartFrame + 1}`)
+    } else {
+      // px → seconds: one frame is frameStepPx wide and 1/fps long. Dragging the
+      // right edge left shortens; dragging back to full clears the trim.
+      const secDelta = deltaX / (frameStepPx * fps)
+      const next = Math.max(0.1, Math.min(fullLength, startTrimRef.current + secDelta))
+      updateAudioTrack({ trimDuration: next })
+      setLabel(`${next.toFixed(1)}s`)
+    }
+  }
+
+  const onUp = (e: React.PointerEvent) => {
+    if (!drag) return
     try {
       ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
     } catch {}
-    setIsDragging(false)
+    setDrag(null)
     setLabel(null)
   }
 
   return (
     <div className="relative h-8 min-w-full rounded-md bg-muted/60 p-0.5 select-none">
-      {isDragging && label && (
+      {drag && label && (
         <div className="absolute -top-7 left-1/2 z-30 -translate-x-1/2 rounded bg-primary px-2.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-md animate-in fade-in-0">
           {label}
         </div>
@@ -393,13 +421,13 @@ function AudioTrackBar({
 
       <div
         style={{ left: `${trackLeftPx}px`, width: `${trackWidthPx}px` }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerDown={onMoveDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
         className={cn(
-          "absolute top-0.5 bottom-0.5 flex items-center gap-1.5 overflow-hidden rounded border border-sky-500/50 bg-sky-500/25 px-2 text-[11px] font-medium text-sky-700 shadow-sm dark:bg-sky-500/35 dark:text-sky-200",
-          isDragging
+          "group/clip absolute top-0.5 bottom-0.5 flex items-center gap-1.5 overflow-hidden rounded border border-sky-500/50 bg-sky-500/25 px-2 text-[11px] font-medium text-sky-700 shadow-sm dark:bg-sky-500/35 dark:text-sky-200",
+          drag === "move"
             ? "cursor-grabbing ring-2 ring-primary"
             : "cursor-grab hover:border-sky-500/80"
         )}
@@ -417,8 +445,23 @@ function AudioTrackBar({
           {audioTrack.name}
         </span>
         <span className="relative z-10 ml-auto shrink-0 opacity-80 tabular-nums text-[10px]">
-          F{audioTrack.startFrame + 1}
+          {activeDuration.toFixed(1)}s
         </span>
+
+        {/* Right-edge trim handle — drag left to shorten. Its own pointer
+            handlers + stopPropagation keep it from starting a move drag. */}
+        <div
+          role="slider"
+          aria-label="Trim audio length"
+          aria-valuenow={Math.round(activeDuration * 10) / 10}
+          onPointerDown={onTrimDown}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+          className="absolute inset-y-0 right-0 z-20 flex w-2.5 cursor-ew-resize items-center justify-center rounded-r bg-sky-600/50 opacity-0 transition-opacity group-hover/clip:opacity-100 hover:bg-sky-500"
+        >
+          <div className="h-3.5 w-0.5 rounded-full bg-white/90" />
+        </div>
       </div>
     </div>
   )
