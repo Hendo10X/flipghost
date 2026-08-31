@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   const framePayloads = body.frames as FramePayload[]
   const userId = session.user.id
   let projectId: string
+  let replacingFrames = false
 
   const audioTrackStr = body.audioTrack ? JSON.stringify(body.audioTrack) : null
 
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       return Response.json({ error: "Not found" }, { status: 404 })
     }
     projectId = updated[0].id
-    await db.delete(frames).where(eq(frames.projectId, projectId))
+    replacingFrames = true
   } else {
     const created = await db
       .insert(projects)
@@ -76,14 +77,26 @@ export async function POST(request: Request) {
   // The frames table doubles as blob storage for the MVP: the Fabric JSON
   // lives in canvas_data_url and the PNG snapshot in thumbnail_url. Swap
   // these for S3/R2 object URLs later without changing the schema.
-  await db.insert(frames).values(
-    framePayloads.map((frame, index) => ({
-      projectId,
-      orderIndex: Number.isFinite(frame.orderIndex) ? frame.orderIndex : index,
-      canvasDataUrl: frame.json ?? null,
-      thumbnailUrl: frame.thumbnail ?? null,
-    }))
-  )
+  const rows = framePayloads.map((frame, index) => ({
+    projectId,
+    orderIndex: Number.isFinite(frame.orderIndex) ? frame.orderIndex : index,
+    canvasDataUrl: frame.json ?? null,
+    thumbnailUrl: frame.thumbnail ?? null,
+  }))
+
+  // Replacing a project's frames has to be atomic. A bare delete then a
+  // separate insert leaves the project with zero frames if the (multi-megabyte)
+  // insert fails after the delete commits — permanent loss on a save that fires
+  // every 1.5s. db.batch() runs both in one transaction, so a failed insert
+  // rolls the delete back. (Ported from #26 on master.)
+  if (replacingFrames) {
+    await db.batch([
+      db.delete(frames).where(eq(frames.projectId, projectId)),
+      db.insert(frames).values(rows),
+    ])
+  } else {
+    await db.insert(frames).values(rows)
+  }
 
   return Response.json({ id: projectId })
 }
