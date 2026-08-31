@@ -17,6 +17,7 @@ export interface ProjectSnapshot {
   stagePresetId: string
   brushColor: string
   brushSize: number
+  brushOpacity: number
 }
 
 export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
@@ -32,6 +33,7 @@ export function snapshotFromState(state: ProjectSnapshot): ProjectSnapshot {
     stagePresetId: state.stagePresetId,
     brushColor: state.brushColor,
     brushSize: state.brushSize,
+    brushOpacity: state.brushOpacity,
   }
 }
 

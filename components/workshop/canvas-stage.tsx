@@ -13,6 +13,7 @@ import {
   ZOOM_MAX,
   ZOOM_MIN,
 } from "@/lib/flipbook/store"
+import type { PressureBrush } from "@/lib/flipbook/pressure-brush"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -110,6 +111,7 @@ export function CanvasStage() {
   const tool = useFlipbook((s) => s.tool)
   const brushColor = useFlipbook((s) => s.brushColor)
   const brushSize = useFlipbook((s) => s.brushSize)
+  const brushOpacity = useFlipbook((s) => s.brushOpacity)
   const onionSkin = useFlipbook((s) => s.onionSkin)
   const onionBefore = useFlipbook((s) => s.onionBefore)
   const onionAfter = useFlipbook((s) => s.onionAfter)
@@ -361,8 +363,10 @@ export function CanvasStage() {
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.color = brushColor
       canvas.freeDrawingBrush.width = brushSize
+      // opacity lives on our PressureBrush, not Fabric's BaseBrush type.
+      ;(canvas.freeDrawingBrush as PressureBrush).opacity = brushOpacity
     }
-  }, [tool, brushColor, brushSize, ready])
+  }, [tool, brushColor, brushSize, brushOpacity, ready])
 
   // --- Brush cursor: a ring matching the stroke it will lay down ---
   useEffect(() => {

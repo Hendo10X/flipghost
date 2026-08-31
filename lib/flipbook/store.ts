@@ -121,6 +121,8 @@ interface FlipbookState {
   tool: Tool
   brushColor: string
   brushSize: number
+  /** Brush alpha, 0.05–1. Applied as the drawn path's opacity. */
+  brushOpacity: number
   stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
@@ -140,6 +142,7 @@ interface FlipbookState {
   setTool: (tool: Tool) => void
   setBrushColor: (color: string) => void
   setBrushSize: (size: number) => void
+  setBrushOpacity: (opacity: number) => void
   setFps: (fps: number) => void
   setPlaying: (playing: boolean) => void
   toggleOnionSkin: () => void
@@ -180,6 +183,7 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   tool: "brush",
   brushColor: "#1a1a1a",
   brushSize: 8,
+  brushOpacity: 1,
   stagePresetId: "square",
   pendingImport: null,
   projectId: null,
@@ -197,6 +201,8 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   setTool: (tool) => set({ tool }),
   setBrushColor: (brushColor) => set({ brushColor }),
   setBrushSize: (brushSize) => set({ brushSize }),
+  setBrushOpacity: (brushOpacity) =>
+    set({ brushOpacity: clamp(brushOpacity, 0.05, 1) }),
   setFps: (fps) => set({ fps }),
   setPlaying: (playing) => set({ playing }),
   toggleOnionSkin: () => set((s) => ({ onionSkin: !s.onionSkin })),

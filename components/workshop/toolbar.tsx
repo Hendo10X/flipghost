@@ -32,6 +32,9 @@ import {
 
 const BRUSH_SIZES = [4, 8, 16, 32] as const
 const DOT_CLASSES = ["size-1", "size-1.5", "size-2.5", "size-3.5"] as const
+// Discrete opacity stops, matching the rail's discrete brush sizes rather than
+// dropping a continuous slider into a 48px-wide vertical rail.
+const BRUSH_OPACITIES = [1, 0.6, 0.3, 0.15] as const
 
 const TOOLS: { tool: Tool; label: string; icon: typeof PencilEdit02Icon }[] = [
   { tool: "select", label: "Select (V)", icon: Cursor01Icon },
@@ -128,6 +131,8 @@ export function Toolbar() {
   const setBrushColor = useFlipbook((s) => s.setBrushColor)
   const brushSize = useFlipbook((s) => s.brushSize)
   const setBrushSize = useFlipbook((s) => s.setBrushSize)
+  const brushOpacity = useFlipbook((s) => s.brushOpacity)
+  const setBrushOpacity = useFlipbook((s) => s.setBrushOpacity)
   const clearFrame = useFlipbook((s) => s.clearFrame)
   const undo = useFlipbook((s) => s.undo)
   const redo = useFlipbook((s) => s.redo)
@@ -363,6 +368,44 @@ export function Toolbar() {
             <TooltipContent side="right">Brush size {size}</TooltipContent>
           </Tooltip>
         ))}
+      </div>
+
+      <div className="my-2 h-px w-6 bg-border" />
+
+      <div
+        role="radiogroup"
+        aria-label="Brush opacity"
+        className="flex flex-col gap-1"
+      >
+        {BRUSH_OPACITIES.map((level) => {
+          const selected = Math.abs(brushOpacity - level) < 0.001
+          const percent = Math.round(level * 100)
+          return (
+            <Tooltip key={level}>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-lg"
+                    role="radio"
+                    aria-checked={selected}
+                    aria-label={`Brush opacity ${percent} percent`}
+                    onClick={() => setBrushOpacity(level)}
+                    className={cn(selected && "bg-muted")}
+                  >
+                    {/* The dot carries its own alpha so the swatch previews the
+                        stroke you'll get, not just which stop is active. */}
+                    <span
+                      className="size-2.5 rounded-full bg-foreground"
+                      style={{ opacity: level }}
+                    />
+                  </Button>
+                }
+              />
+              <TooltipContent side="right">Opacity {percent}%</TooltipContent>
+            </Tooltip>
+          )
+        })}
       </div>
 
       <div className="my-2 h-px w-6 bg-border" />
