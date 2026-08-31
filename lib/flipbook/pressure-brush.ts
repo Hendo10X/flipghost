@@ -73,6 +73,9 @@ export class PressureBrush extends BaseBrush {
   /** How much to pull the stroke toward the pointer path. Higher is smoother. */
   streamline = 0.5
 
+  /** Stroke alpha, 0.05–1. Baked onto the committed path's `opacity`. */
+  opacity = 1
+
   private points: InputPoint[] = []
 
   /** Set per stroke: infer pressure from velocity when the device has none. */
@@ -128,6 +131,9 @@ export class PressureBrush extends BaseBrush {
     if (!data) return
     this._saveAndTransform(ctx)
     this._setShadow()
+    // Preview the stroke at its real alpha. _saveAndTransform saved the ctx,
+    // so the matching restore() below puts globalAlpha back to 1.
+    ctx.globalAlpha = this.opacity
     ctx.fillStyle = this.color
     ctx.fill(new Path2D(data))
     ctx.restore()
@@ -147,6 +153,7 @@ export class PressureBrush extends BaseBrush {
       fill: this.color,
       stroke: null,
       strokeWidth: 0,
+      opacity: this.opacity,
     })
 
     this.canvas.fire("before:path:created", { path })
