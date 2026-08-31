@@ -9,7 +9,6 @@ import {
   PauseIcon,
   PlayIcon,
   PlusSignIcon,
-  Settings01Icon,
   VolumeHighIcon,
   VolumeOffIcon,
 } from "@hugeicons/core-free-icons"
@@ -32,6 +31,12 @@ import {
 } from "@/components/ui/tooltip"
 
 const ONION_COUNTS = Array.from({ length: ONION_MAX + 1 }, (_, i) => i)
+
+// Audio rides inline in the project row as a base64 data URL on every save, so
+// this caps the DB write size, not creativity. Lift it once audio moves to
+// off-row object storage.
+const MAX_AUDIO_MB = 8
+const MAX_AUDIO_BYTES = MAX_AUDIO_MB * 1024 * 1024
 
 /** Popover for how many frames to ghost on each side, and how strongly. */
 function OnionSettings() {
@@ -146,80 +151,80 @@ function OnionSettings() {
   )
 }
 
-/** Popover for Audio track settings (start frame, volume, mute, offset, remove). */
-function AudioSettingsPopover() {
+/**
+ * Inline audio controls in the timeline toolbar: name, mute, volume, remove.
+ * Replaces the old start-frame / volume / offset settings popover — the clip
+ * on the lane below the frames now handles positioning by drag.
+ */
+function AudioControls() {
   const audioTrack = useFlipbook((s) => s.audioTrack)
   const updateAudioTrack = useFlipbook((s) => s.updateAudioTrack)
   const removeAudioTrack = useFlipbook((s) => s.removeAudioTrack)
-  const frames = useFlipbook((s) => s.frames)
 
   if (!audioTrack) return null
 
+  const percent = audioTrack.muted ? 0 : Math.round(audioTrack.volume * 100)
+
   return (
-    <Popover>
+    <div className="flex items-center gap-0.5 rounded-md border bg-muted/40 py-0.5 pr-0.5 pl-2">
+      <HugeiconsIcon
+        icon={VolumeHighIcon}
+        className="size-4 shrink-0 text-sky-600 dark:text-sky-400"
+        strokeWidth={1.8}
+      />
+      <span
+        className="mr-1 max-w-28 truncate text-xs font-medium"
+        title={audioTrack.name}
+      >
+        {audioTrack.name}
+      </span>
+
       <Tooltip>
         <TooltipTrigger
           render={
-            <PopoverTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Audio settings"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <HugeiconsIcon icon={Settings01Icon} strokeWidth={1.8} />
-                </Button>
-              }
-            />
-          }
-        />
-        <TooltipContent>Audio track settings</TooltipContent>
-      </Tooltip>
-
-      <PopoverContent side="top" align="center" className="w-72 p-4">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between border-b pb-2">
-            <span className="truncate text-xs font-medium" title={audioTrack.name}>
-              {audioTrack.name}
-            </span>
             <Button
               variant="ghost"
-              size="xs"
-              onClick={removeAudioTrack}
-              className="text-xs text-destructive hover:bg-destructive/10"
+              size="icon-sm"
+              aria-label={audioTrack.muted ? "Unmute" : "Mute"}
+              onClick={() => updateAudioTrack({ muted: !audioTrack.muted })}
+              className="text-muted-foreground"
             >
-              Remove
-            </Button>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs font-medium">
-              <span>Start Frame</span>
-              <span className="text-muted-foreground tabular-nums">
-                Frame {audioTrack.startFrame + 1}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                aria-label="Audio start frame"
-                min={0}
-                max={Math.max(0, frames.length - 1)}
-                value={audioTrack.startFrame}
-                onChange={(e) =>
-                  updateAudioTrack({ startFrame: parseInt(e.target.value, 10) })
-                }
-                className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+              <HugeiconsIcon
+                icon={audioTrack.muted ? VolumeOffIcon : VolumeHighIcon}
+                strokeWidth={1.8}
               />
-            </div>
-          </div>
+            </Button>
+          }
+        />
+        <TooltipContent>{audioTrack.muted ? "Unmute" : "Mute"}</TooltipContent>
+      </Tooltip>
 
-          <div className="flex flex-col gap-1.5">
+      <Popover>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <PopoverTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Volume"
+                    className="text-[10px] font-medium text-muted-foreground tabular-nums"
+                  >
+                    {percent}
+                  </Button>
+                }
+              />
+            }
+          />
+          <TooltipContent>Volume</TooltipContent>
+        </Tooltip>
+        <PopoverContent side="top" align="center" className="w-44 p-3">
+          <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between text-xs font-medium">
               <span>Volume</span>
               <span className="text-muted-foreground tabular-nums">
-                {audioTrack.muted ? "Muted" : `${Math.round(audioTrack.volume * 100)}%`}
+                {audioTrack.muted ? "Muted" : `${percent}%`}
               </span>
             </div>
             <Slider
@@ -233,30 +238,26 @@ function AudioSettingsPopover() {
               step={0.05}
             />
           </div>
+        </PopoverContent>
+      </Popover>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs font-medium">
-              <span>Audio Start Offset</span>
-              <span className="text-muted-foreground tabular-nums">
-                {audioTrack.offset.toFixed(1)}s
-              </span>
-            </div>
-            <input
-              type="range"
-              aria-label="Audio start offset"
-              min={0}
-              max={Math.max(0, audioTrack.duration - 0.5)}
-              step={0.1}
-              value={audioTrack.offset}
-              onChange={(e) =>
-                updateAudioTrack({ offset: parseFloat(e.target.value) })
-              }
-              className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-            />
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Remove audio"
+              onClick={removeAudioTrack}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.8} />
+            </Button>
+          }
+        />
+        <TooltipContent>Remove audio</TooltipContent>
+      </Tooltip>
+    </div>
   )
 }
 
@@ -345,107 +346,62 @@ function AudioTrackBar({
   frameStepPx: number
 }) {
   const [isDragging, setIsDragging] = useState(false)
-  const [dragType, setDragType] = useState<"move" | "offset" | "trimStart" | "trimEnd" | null>(null)
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null)
+  const [label, setLabel] = useState<string | null>(null)
   const startXRef = useRef(0)
   const startFrameRef = useRef(audioTrack.startFrame)
-  const startOffsetRef = useRef(audioTrack.offset)
-  const startDurationRef = useRef(audioTrack.duration)
-  const startTrimDurationRef = useRef(
-    audioTrack.trimDuration ?? audioTrack.duration - audioTrack.offset
-  )
 
-  const activeDuration = Math.min(
-    audioTrack.duration - audioTrack.offset,
-    audioTrack.trimDuration ?? audioTrack.duration - audioTrack.offset
-  )
-  const audioSpanFrames = Math.max(1, Math.ceil(activeDuration * fps))
+  // The clip is as wide as the audio is long — no trimming.
+  const audioSpanFrames = Math.max(1, Math.ceil(audioTrack.duration * fps))
   const trackWidthPx = Math.max(48, audioSpanFrames * frameStepPx - 8)
   const trackLeftPx = audioTrack.startFrame * frameStepPx
 
-  const handlePointerDown = (
-    e: React.PointerEvent,
-    type: "move" | "offset" | "trimStart" | "trimEnd"
-  ) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault()
     e.stopPropagation()
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-
-    const effectiveType = type === "move" && e.shiftKey ? "offset" : type
-
-    setDragType(effectiveType)
     setIsDragging(true)
     startXRef.current = e.clientX
     startFrameRef.current = audioTrack.startFrame
-    startOffsetRef.current = audioTrack.offset
-    startDurationRef.current = audioTrack.duration
-    startTrimDurationRef.current =
-      audioTrack.trimDuration ?? audioTrack.duration - audioTrack.offset
   }
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !dragType) return
-    const deltaX = e.clientX - startXRef.current
-
-    if (dragType === "move") {
-      const frameDelta = Math.round(deltaX / frameStepPx)
-      const nextStartFrame = Math.max(0, startFrameRef.current + frameDelta)
-      if (nextStartFrame !== audioTrack.startFrame) {
-        updateAudioTrack({ startFrame: nextStartFrame })
-      }
-      setActiveTooltip(`Start: Frame ${nextStartFrame + 1}`)
-    } else if (dragType === "offset" || dragType === "trimStart") {
-      const secondsDelta = deltaX / 100
-      const nextOffset = Math.max(
-        0,
-        Math.min(startDurationRef.current - 0.2, startOffsetRef.current + secondsDelta)
-      )
-      updateAudioTrack({ offset: nextOffset })
-      setActiveTooltip(`Trim Start: ${nextOffset.toFixed(2)}s`)
-    } else if (dragType === "trimEnd") {
-      const secondsDelta = deltaX / (frameStepPx * fps)
-      const maxPossibleDuration = startDurationRef.current - audioTrack.offset
-      const nextTrimDuration = Math.max(
-        0.5,
-        Math.min(maxPossibleDuration, startTrimDurationRef.current + secondsDelta)
-      )
-      updateAudioTrack({ trimDuration: nextTrimDuration })
-      setActiveTooltip(`Length: ${nextTrimDuration.toFixed(1)}s`)
+    if (!isDragging) return
+    const frameDelta = Math.round((e.clientX - startXRef.current) / frameStepPx)
+    const nextStartFrame = Math.max(0, startFrameRef.current + frameDelta)
+    if (nextStartFrame !== audioTrack.startFrame) {
+      updateAudioTrack({ startFrame: nextStartFrame })
     }
+    setLabel(`Frame ${nextStartFrame + 1}`)
   }
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (isDragging) {
-      try {
-        ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-      } catch {}
-      setIsDragging(false)
-      setDragType(null)
-      setActiveTooltip(null)
-    }
+    if (!isDragging) return
+    try {
+      ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+    } catch {}
+    setIsDragging(false)
+    setLabel(null)
   }
 
   return (
     <div className="relative h-8 min-w-full rounded-md bg-muted/60 p-0.5 select-none">
-      {/* Active dragging tooltip badge */}
-      {isDragging && activeTooltip && (
-        <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-30 rounded bg-primary px-2.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-md animate-in fade-in-0">
-          {activeTooltip}
+      {isDragging && label && (
+        <div className="absolute -top-7 left-1/2 z-30 -translate-x-1/2 rounded bg-primary px-2.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-md animate-in fade-in-0">
+          {label}
         </div>
       )}
 
       <div
-        style={{
-          left: `${trackLeftPx}px`,
-          width: `${trackWidthPx}px`,
-        }}
-        onPointerDown={(e) => handlePointerDown(e, "move")}
+        style={{ left: `${trackLeftPx}px`, width: `${trackWidthPx}px` }}
+        onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
         className={cn(
-          "group/track absolute top-0.5 bottom-0.5 flex items-center gap-1.5 overflow-hidden rounded bg-sky-500/25 text-sky-700 dark:bg-sky-500/35 dark:text-sky-200 border border-sky-500/50 px-2 text-[11px] font-medium shadow-sm transition-shadow",
-          isDragging ? "cursor-grabbing ring-2 ring-primary" : "cursor-grab hover:border-sky-500/80"
+          "absolute top-0.5 bottom-0.5 flex items-center gap-1.5 overflow-hidden rounded border border-sky-500/50 bg-sky-500/25 px-2 text-[11px] font-medium text-sky-700 shadow-sm dark:bg-sky-500/35 dark:text-sky-200",
+          isDragging
+            ? "cursor-grabbing ring-2 ring-primary"
+            : "cursor-grab hover:border-sky-500/80"
         )}
       >
         <AudioWaveformCanvas
@@ -453,30 +409,16 @@ function AudioTrackBar({
           width={trackWidthPx}
           height={28}
         />
-
-        {/* Trim Start Handle (Left edge handle) */}
-        <div
-          title="Drag left handle to trim start (or Shift+Drag track)"
-          onPointerDown={(e) => handlePointerDown(e, "trimStart")}
-          className="absolute left-0 top-0 bottom-0 z-20 flex w-3 items-center justify-center cursor-ew-resize bg-sky-600/60 text-white opacity-0 transition-opacity hover:bg-sky-500 group-hover/track:opacity-100 rounded-l"
-        >
-          <div className="h-3.5 w-0.5 rounded-full bg-white/90" />
-        </div>
-
-        <HugeiconsIcon icon={VolumeHighIcon} className="relative z-10 size-3.5 shrink-0" />
-        <span className="relative z-10 truncate font-semibold">{audioTrack.name}</span>
-        <span className="relative z-10 ml-auto shrink-0 opacity-80 tabular-nums text-[10px]">
-          F{audioTrack.startFrame + 1} • {activeDuration.toFixed(1)}s
+        <HugeiconsIcon
+          icon={VolumeHighIcon}
+          className="relative z-10 size-3.5 shrink-0"
+        />
+        <span className="relative z-10 truncate font-semibold">
+          {audioTrack.name}
         </span>
-
-        {/* Trim Finish Handle (Right edge handle) */}
-        <div
-          title="Drag right handle to trim finish length"
-          onPointerDown={(e) => handlePointerDown(e, "trimEnd")}
-          className="absolute right-0 top-0 bottom-0 z-20 flex w-3 items-center justify-center cursor-ew-resize bg-sky-600/60 text-white opacity-0 transition-opacity hover:bg-sky-500 group-hover/track:opacity-100 rounded-r"
-        >
-          <div className="h-3.5 w-0.5 rounded-full bg-white/90" />
-        </div>
+        <span className="relative z-10 ml-auto shrink-0 opacity-80 tabular-nums text-[10px]">
+          F{audioTrack.startFrame + 1}
+        </span>
       </div>
     </div>
   )
@@ -503,13 +445,26 @@ export function Timeline() {
   const currentIndex = frames.findIndex((f) => f.id === currentId)
   const dragIndex = useRef<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const [audioError, setAudioError] = useState<string | null>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const reducedMotion = usePrefersReducedMotion()
 
   const handleAudioUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    // Reset first so re-picking the same file still fires onChange, even after
+    // a rejection below.
+    e.target.value = ""
     if (!file) return
+
+    if (file.size > MAX_AUDIO_BYTES) {
+      const mb = (file.size / (1024 * 1024)).toFixed(1)
+      setAudioError(
+        `That track is ${mb} MB — audio has to stay under ${MAX_AUDIO_MB} MB for now.`
+      )
+      return
+    }
+    setAudioError(null)
 
     const reader = new FileReader()
     reader.onload = (event) => {
@@ -530,8 +485,6 @@ export function Timeline() {
       }
     }
     reader.readAsDataURL(file)
-    // Reset file input value so selecting the same file again triggers onChange
-    e.target.value = ""
   }
 
   // Stepping frames with the hotkeys moves the selection, which would
@@ -646,66 +599,38 @@ export function Timeline() {
 
         <div className="mx-1 h-4 w-px bg-border" />
 
-        {/* Audio Track Toolbar Control */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant={audioTrack ? "secondary" : "ghost"}
-                size="sm"
-                aria-label={audioTrack ? "Audio Settings" : "Add Audio"}
-                onClick={() => {
-                  if (!audioTrack) {
-                    fileInputRef.current?.click()
-                  }
-                }}
-                className={cn(
-                  "gap-1.5 text-muted-foreground",
-                  audioTrack && "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium"
-                )}
-              >
-                <HugeiconsIcon icon={VolumeHighIcon} strokeWidth={1.8} />
-                {audioTrack ? (
-                  <span className="max-w-24 truncate">{audioTrack.name}</span>
-                ) : (
-                  "Add Audio"
-                )}
-              </Button>
-            }
-          />
-          <TooltipContent>
-            {audioTrack ? `Audio: ${audioTrack.name}` : "Add an audio track aligned to the timeline"}
-          </TooltipContent>
-        </Tooltip>
-
-        {audioTrack && (
-          <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={audioTrack.muted ? "Unmute Audio" : "Mute Audio"}
-                    onClick={() =>
-                      updateAudioTrack({ muted: !audioTrack.muted })
-                    }
-                    className="text-muted-foreground"
-                  >
-                    <HugeiconsIcon
-                      icon={audioTrack.muted ? VolumeOffIcon : VolumeHighIcon}
-                      strokeWidth={1.8}
-                    />
-                  </Button>
-                }
-              />
-              <TooltipContent>
-                {audioTrack.muted ? "Unmute Audio" : "Mute Audio"}
-              </TooltipContent>
-            </Tooltip>
-
-            <AudioSettingsPopover />
-          </div>
+        {/* Audio: add when empty, inline controls when present. Positioning is
+            done by dragging the clip on the lane below the frames. */}
+        {audioTrack ? (
+          <AudioControls />
+        ) : (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Add audio"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-1.5 text-muted-foreground"
+                >
+                  <HugeiconsIcon icon={VolumeHighIcon} strokeWidth={1.8} />
+                  Add audio
+                </Button>
+              }
+            />
+            <TooltipContent>
+              Add an audio track aligned to the timeline
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {audioError && (
+          <span
+            role="alert"
+            className="max-w-40 text-xs leading-tight text-destructive"
+          >
+            {audioError}
+          </span>
         )}
 
         <div className="ml-auto flex items-center gap-1">
