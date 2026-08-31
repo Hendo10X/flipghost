@@ -49,7 +49,10 @@ export function getStagePreset(id: string): StagePreset {
  * the toolbar rail for that reason — it lives in the colour popover, which is
  * where you are standing when you want it.
  */
-export type Tool = "brush" | "eraser" | "select" | "eyedropper"
+// `bucket` has flood-fill canvas logic in canvas-stage but no toolbar button
+// yet, so it is not reachable from the UI — that wiring is issue #21. Included
+// here so the existing `tool === "bucket"` guards type-check.
+export type Tool = "brush" | "eraser" | "select" | "eyedropper" | "bucket"
 
 export type FrameJSON = Record<string, unknown>
 
@@ -59,6 +62,25 @@ export interface Frame {
   json: FrameJSON | null
   /** PNG snapshot (transparent background) used for thumbs/onion/playback. */
   dataUrl: string | null
+}
+
+export interface AudioTrack {
+  id: string
+  name: string
+  /** Data URL (base64) or Blob URL for audio playback */
+  dataUrl: string
+  /** Full original duration in seconds */
+  duration: number
+  /** Frame index where audio playback starts (0-indexed) */
+  startFrame: number
+  /** Start offset inside the audio file in seconds */
+  offset: number
+  /** Active trimmed duration in seconds (optional) */
+  trimDuration?: number
+  /** Volume level 0.0 to 1.0 */
+  volume: number
+  /** Whether the audio track is muted */
+  muted: boolean
 }
 
 /**
@@ -124,6 +146,8 @@ interface FlipbookState {
   stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
+  /** Audio track aligned to the timeline, null if no audio added. */
+  audioTrack: AudioTrack | null
   /** Cloud project id once saved; null means local scratch work. */
   projectId: string | null
   cloudStatus: "idle" | "saving" | "saved" | "error"
@@ -143,6 +167,9 @@ interface FlipbookState {
   setStagePreset: (id: string) => void
   requestImport: (dataUrl: string) => void
   clearPendingImport: () => void
+  setAudioTrack: (audio: AudioTrack | null) => void
+  updateAudioTrack: (partial: Partial<AudioTrack>) => void
+  removeAudioTrack: () => void
   setTitle: (title: string) => void
   setTool: (tool: Tool) => void
   setBrushColor: (color: string) => void
@@ -189,6 +216,7 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   brushSize: 8,
   stagePresetId: "square",
   pendingImport: null,
+  audioTrack: null,
   projectId: null,
   cloudStatus: "idle",
   past: [],
@@ -221,6 +249,12 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
     set({ stagePresetId: getStagePreset(id).id }),
   requestImport: (dataUrl) => set({ pendingImport: dataUrl }),
   clearPendingImport: () => set({ pendingImport: null }),
+  setAudioTrack: (audioTrack) => set({ audioTrack }),
+  updateAudioTrack: (partial) =>
+    set((s) => ({
+      audioTrack: s.audioTrack ? { ...s.audioTrack, ...partial } : null,
+    })),
+  removeAudioTrack: () => set({ audioTrack: null }),
   setTitle: (title) => set({ title }),
   setTool: (tool) => set({ tool }),
   setBrushColor: (brushColor) => set({ brushColor }),

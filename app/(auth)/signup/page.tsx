@@ -50,6 +50,10 @@ export default function SignUpPage() {
       setPending(false)
       return
     }
+    try {
+      window.localStorage.setItem("flipghost:is-new-signup", "true")
+      window.localStorage.removeItem("flipghost:tour-completed:v1")
+    } catch {}
     router.push("/projects")
   }
 

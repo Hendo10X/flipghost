@@ -40,6 +40,8 @@ export async function POST(request: Request) {
   let projectId: string
   let replacingFrames = false
 
+  const audioTrackStr = body.audioTrack ? JSON.stringify(body.audioTrack) : null
+
   if (typeof body.projectId === "string" && body.projectId) {
     const updated = await db
       .update(projects)
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
         title,
         fps: Math.round(body.fps),
         resolution: body.stagePresetId.slice(0, 32),
+        audioTrack: audioTrackStr,
         updatedAt: new Date(),
       })
       .where(and(eq(projects.id, body.projectId), eq(projects.userId, userId)))
@@ -64,6 +67,7 @@ export async function POST(request: Request) {
         title,
         fps: Math.round(body.fps),
         resolution: body.stagePresetId.slice(0, 32),
+        audioTrack: audioTrackStr,
         updatedAt: new Date(),
       })
       .returning({ id: projects.id })
