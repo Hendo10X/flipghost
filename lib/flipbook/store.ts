@@ -49,7 +49,10 @@ export function getStagePreset(id: string): StagePreset {
  * the toolbar rail for that reason — it lives in the colour popover, which is
  * where you are standing when you want it.
  */
-export type Tool = "brush" | "eraser" | "select" | "eyedropper"
+// `bucket` has flood-fill canvas logic in canvas-stage but no toolbar button
+// yet, so it is not reachable from the UI — that wiring is issue #21. Included
+// here so the existing `tool === "bucket"` guards type-check.
+export type Tool = "brush" | "eraser" | "select" | "eyedropper" | "bucket"
 
 export type FrameJSON = Record<string, unknown>
 
