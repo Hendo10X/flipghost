@@ -151,116 +151,6 @@ function OnionSettings() {
   )
 }
 
-/**
- * Inline audio controls in the timeline toolbar: name, mute, volume, remove.
- * Replaces the old start-frame / volume / offset settings popover — the clip
- * on the lane below the frames now handles positioning by drag.
- */
-function AudioControls() {
-  const audioTrack = useFlipbook((s) => s.audioTrack)
-  const updateAudioTrack = useFlipbook((s) => s.updateAudioTrack)
-  const removeAudioTrack = useFlipbook((s) => s.removeAudioTrack)
-
-  if (!audioTrack) return null
-
-  const percent = audioTrack.muted ? 0 : Math.round(audioTrack.volume * 100)
-
-  return (
-    <div className="flex items-center gap-0.5 rounded-md border bg-muted/40 py-0.5 pr-0.5 pl-2">
-      <HugeiconsIcon
-        icon={VolumeHighIcon}
-        className="size-4 shrink-0 text-sky-600 dark:text-sky-400"
-        strokeWidth={1.8}
-      />
-      <span
-        className="mr-1 max-w-28 truncate text-xs font-medium"
-        title={audioTrack.name}
-      >
-        {audioTrack.name}
-      </span>
-
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={audioTrack.muted ? "Unmute" : "Mute"}
-              onClick={() => updateAudioTrack({ muted: !audioTrack.muted })}
-              className="text-muted-foreground"
-            >
-              <HugeiconsIcon
-                icon={audioTrack.muted ? VolumeOffIcon : VolumeHighIcon}
-                strokeWidth={1.8}
-              />
-            </Button>
-          }
-        />
-        <TooltipContent>{audioTrack.muted ? "Unmute" : "Mute"}</TooltipContent>
-      </Tooltip>
-
-      <Popover>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <PopoverTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Volume"
-                    className="text-[10px] font-medium text-muted-foreground tabular-nums"
-                  >
-                    {percent}
-                  </Button>
-                }
-              />
-            }
-          />
-          <TooltipContent>Volume</TooltipContent>
-        </Tooltip>
-        <PopoverContent side="top" align="center" className="w-44 p-3">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs font-medium">
-              <span>Volume</span>
-              <span className="text-muted-foreground tabular-nums">
-                {audioTrack.muted ? "Muted" : `${percent}%`}
-              </span>
-            </div>
-            <Slider
-              value={[audioTrack.muted ? 0 : audioTrack.volume]}
-              onValueChange={(val) => {
-                const value = Array.isArray(val) ? val[0] : val
-                updateAudioTrack({ volume: value, muted: value === 0 })
-              }}
-              min={0}
-              max={1}
-              step={0.05}
-            />
-          </div>
-        </PopoverContent>
-      </Popover>
-
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Remove audio"
-              onClick={removeAudioTrack}
-              className="text-muted-foreground hover:text-destructive"
-            >
-              <HugeiconsIcon icon={Delete02Icon} strokeWidth={1.8} />
-            </Button>
-          }
-        />
-        <TooltipContent>Remove audio</TooltipContent>
-      </Tooltip>
-    </div>
-  )
-}
-
 function AudioWaveformCanvas({
   dataUrl,
   width,
@@ -334,33 +224,44 @@ function AudioWaveformCanvas({
   )
 }
 
-function AudioTrackBar({
-  audioTrack,
+/**
+ * One audio clip on the shared lane: drag the body to move it, the right edge
+ * to trim its length, and the menu for mute / volume / duplicate / split /
+ * remove. Rendered absolutely-positioned by start frame inside the lane.
+ */
+function AudioClipBar({
+  clip,
   fps,
-  updateAudioTrack,
   frameStepPx,
+  currentIndex,
+  updateClip,
+  duplicateClip,
+  splitClip,
+  removeClip,
 }: {
-  audioTrack: AudioTrack
+  clip: AudioTrack
   fps: number
-  updateAudioTrack: (partial: Partial<AudioTrack>) => void
   frameStepPx: number
+  currentIndex: number
+  updateClip: (id: string, partial: Partial<AudioTrack>) => void
+  duplicateClip: (id: string) => void
+  splitClip: (id: string, atFrame: number) => void
+  removeClip: (id: string) => void
 }) {
   const [drag, setDrag] = useState<"move" | "trim" | null>(null)
-  const [label, setLabel] = useState<string | null>(null)
   const startXRef = useRef(0)
-  const startFrameRef = useRef(audioTrack.startFrame)
+  const startFrameRef = useRef(clip.startFrame)
   const startTrimRef = useRef(0)
 
-  // Active (played) length: the audio minus any start offset, capped by the
-  // right-edge trim (trimDuration). The clip is as wide as it actually plays.
-  const fullLength = Math.max(0, audioTrack.duration - audioTrack.offset)
-  const activeDuration = Math.min(
-    fullLength,
-    audioTrack.trimDuration ?? fullLength
-  )
-  const audioSpanFrames = Math.max(1, Math.ceil(activeDuration * fps))
-  const trackWidthPx = Math.max(48, audioSpanFrames * frameStepPx - 8)
-  const trackLeftPx = audioTrack.startFrame * frameStepPx
+  const fullLength = Math.max(0, clip.duration - clip.offset)
+  const activeDuration = Math.min(fullLength, clip.trimDuration ?? fullLength)
+  const spanFrames = Math.max(1, Math.ceil(activeDuration * fps))
+  const widthPx = Math.max(48, spanFrames * frameStepPx - 8)
+  const leftPx = clip.startFrame * frameStepPx
+  const percent = clip.muted ? 0 : Math.round(clip.volume * 100)
+  // Only offer a split when the playhead sits strictly inside this clip.
+  const canSplit =
+    currentIndex > clip.startFrame && currentIndex < clip.startFrame + spanFrames
 
   const onMoveDown = (e: React.PointerEvent) => {
     e.preventDefault()
@@ -368,7 +269,7 @@ function AudioTrackBar({
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     setDrag("move")
     startXRef.current = e.clientX
-    startFrameRef.current = audioTrack.startFrame
+    startFrameRef.current = clip.startFrame
   }
 
   const onTrimDown = (e: React.PointerEvent) => {
@@ -384,21 +285,20 @@ function AudioTrackBar({
     if (!drag) return
     const deltaX = e.clientX - startXRef.current
     if (drag === "move") {
-      const nextStartFrame = Math.max(
+      const next = Math.max(
         0,
         startFrameRef.current + Math.round(deltaX / frameStepPx)
       )
-      if (nextStartFrame !== audioTrack.startFrame) {
-        updateAudioTrack({ startFrame: nextStartFrame })
-      }
-      setLabel(`Frame ${nextStartFrame + 1}`)
+      if (next !== clip.startFrame) updateClip(clip.id, { startFrame: next })
     } else {
       // px → seconds: one frame is frameStepPx wide and 1/fps long. Dragging the
       // right edge left shortens; dragging back to full clears the trim.
       const secDelta = deltaX / (frameStepPx * fps)
-      const next = Math.max(0.1, Math.min(fullLength, startTrimRef.current + secDelta))
-      updateAudioTrack({ trimDuration: next })
-      setLabel(`${next.toFixed(1)}s`)
+      const next = Math.max(
+        0.1,
+        Math.min(fullLength, startTrimRef.current + secDelta)
+      )
+      updateClip(clip.id, { trimDuration: next })
     }
   }
 
@@ -408,60 +308,150 @@ function AudioTrackBar({
       ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
     } catch {}
     setDrag(null)
-    setLabel(null)
   }
 
   return (
-    <div className="relative h-8 min-w-full rounded-md bg-muted/60 p-0.5 select-none">
-      {drag && label && (
-        <div className="absolute -top-7 left-1/2 z-30 -translate-x-1/2 rounded bg-primary px-2.5 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-md animate-in fade-in-0">
-          {label}
-        </div>
+    <div
+      style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
+      onPointerDown={onMoveDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+      className={cn(
+        "group/clip absolute top-0.5 bottom-0.5 flex items-center gap-1 overflow-hidden rounded border border-sky-500/50 bg-sky-500/25 px-2 text-[11px] font-medium text-sky-700 shadow-sm dark:bg-sky-500/35 dark:text-sky-200",
+        drag === "move"
+          ? "cursor-grabbing ring-2 ring-primary"
+          : "cursor-grab hover:border-sky-500/80"
       )}
+    >
+      <AudioWaveformCanvas dataUrl={clip.dataUrl} width={widthPx} height={28} />
 
-      <div
-        style={{ left: `${trackLeftPx}px`, width: `${trackWidthPx}px` }}
-        onPointerDown={onMoveDown}
-        onPointerMove={onMove}
-        onPointerUp={onUp}
-        onPointerCancel={onUp}
-        className={cn(
-          "group/clip absolute top-0.5 bottom-0.5 flex items-center gap-1.5 overflow-hidden rounded border border-sky-500/50 bg-sky-500/25 px-2 text-[11px] font-medium text-sky-700 shadow-sm dark:bg-sky-500/35 dark:text-sky-200",
-          drag === "move"
-            ? "cursor-grabbing ring-2 ring-primary"
-            : "cursor-grab hover:border-sky-500/80"
-        )}
-      >
-        <AudioWaveformCanvas
-          dataUrl={audioTrack.dataUrl}
-          width={trackWidthPx}
-          height={28}
-        />
-        <HugeiconsIcon
-          icon={VolumeHighIcon}
-          className="relative z-10 size-3.5 shrink-0"
-        />
-        <span className="relative z-10 truncate font-semibold">
-          {audioTrack.name}
-        </span>
-        <span className="relative z-10 ml-auto shrink-0 opacity-80 tabular-nums text-[10px]">
+      <HugeiconsIcon
+        icon={clip.muted ? VolumeOffIcon : VolumeHighIcon}
+        className="relative z-10 size-3.5 shrink-0"
+      />
+      <span className="relative z-10 truncate font-semibold">{clip.name}</span>
+
+      <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1">
+        <span className="text-[10px] opacity-80 tabular-nums">
           {activeDuration.toFixed(1)}s
         </span>
 
-        {/* Right-edge trim handle — drag left to shorten. Its own pointer
-            handlers + stopPropagation keep it from starting a move drag. */}
-        <div
-          role="slider"
-          aria-label="Trim audio length"
-          aria-valuenow={Math.round(activeDuration * 10) / 10}
-          onPointerDown={onTrimDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-          className="absolute inset-y-0 right-0 z-20 flex w-2.5 cursor-ew-resize items-center justify-center rounded-r bg-sky-600/50 opacity-0 transition-opacity group-hover/clip:opacity-100 hover:bg-sky-500"
-        >
-          <div className="h-3.5 w-0.5 rounded-full bg-white/90" />
-        </div>
+        <Popover>
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                aria-label="Clip options"
+                onPointerDown={(e) => e.stopPropagation()}
+                className="flex size-4 items-center justify-center rounded hover:bg-sky-500/30"
+              >
+                <HugeiconsIcon
+                  icon={ArrowDown01Icon}
+                  className="size-3"
+                  strokeWidth={2}
+                />
+              </button>
+            }
+          />
+          <PopoverContent side="top" align="end" className="w-48 p-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className="truncate text-xs font-medium"
+                  title={clip.name}
+                >
+                  {clip.name}
+                </span>
+                <button
+                  type="button"
+                  aria-label={clip.muted ? "Unmute" : "Mute"}
+                  onClick={() => updateClip(clip.id, { muted: !clip.muted })}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <HugeiconsIcon
+                    icon={clip.muted ? VolumeOffIcon : VolumeHighIcon}
+                    className="size-4"
+                    strokeWidth={1.8}
+                  />
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Volume</span>
+                  <span className="text-muted-foreground tabular-nums">
+                    {clip.muted ? "Muted" : `${percent}%`}
+                  </span>
+                </div>
+                <Slider
+                  value={[clip.muted ? 0 : clip.volume]}
+                  onValueChange={(val) => {
+                    const v = Array.isArray(val) ? val[0] : val
+                    updateClip(clip.id, { volume: v, muted: v === 0 })
+                  }}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                />
+              </div>
+
+              <div className="flex items-center gap-1 border-t pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => duplicateClip(clip.id)}
+                  className="flex-1 gap-1.5 text-xs text-muted-foreground"
+                >
+                  <HugeiconsIcon
+                    icon={Copy01Icon}
+                    className="size-3.5"
+                    strokeWidth={1.8}
+                  />
+                  Duplicate
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!canSplit}
+                  onClick={() => splitClip(clip.id, currentIndex)}
+                  className="flex-1 text-xs text-muted-foreground"
+                >
+                  Split here
+                </Button>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeClip(clip.id)}
+                className="w-full gap-1.5 text-xs text-destructive hover:bg-destructive/10"
+              >
+                <HugeiconsIcon
+                  icon={Delete02Icon}
+                  className="size-3.5"
+                  strokeWidth={1.8}
+                />
+                Remove clip
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Right-edge trim handle — drag left to shorten. Its own pointer
+          handlers + stopPropagation keep it from starting a move drag. */}
+      <div
+        role="slider"
+        aria-label="Trim audio length"
+        aria-valuenow={Math.round(activeDuration * 10) / 10}
+        onPointerDown={onTrimDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        className="absolute inset-y-0 right-0 z-20 flex w-2.5 cursor-ew-resize items-center justify-center rounded-r bg-sky-600/50 opacity-0 transition-opacity group-hover/clip:opacity-100 hover:bg-sky-500"
+      >
+        <div className="h-3.5 w-0.5 rounded-full bg-white/90" />
       </div>
     </div>
   )
@@ -481,9 +471,12 @@ export function Timeline() {
   const setFps = useFlipbook((s) => s.setFps)
   const onionSkin = useFlipbook((s) => s.onionSkin)
   const toggleOnionSkin = useFlipbook((s) => s.toggleOnionSkin)
-  const audioTrack = useFlipbook((s) => s.audioTrack)
-  const setAudioTrack = useFlipbook((s) => s.setAudioTrack)
-  const updateAudioTrack = useFlipbook((s) => s.updateAudioTrack)
+  const audioClips = useFlipbook((s) => s.audioClips)
+  const addAudioClip = useFlipbook((s) => s.addAudioClip)
+  const updateAudioClip = useFlipbook((s) => s.updateAudioClip)
+  const removeAudioClip = useFlipbook((s) => s.removeAudioClip)
+  const duplicateAudioClip = useFlipbook((s) => s.duplicateAudioClip)
+  const splitAudioClip = useFlipbook((s) => s.splitAudioClip)
 
   const currentIndex = frames.findIndex((f) => f.id === currentId)
   const dragIndex = useRef<number | null>(null)
@@ -515,7 +508,7 @@ export function Timeline() {
       if (!dataUrl) return
       const audio = new Audio(dataUrl)
       audio.onloadedmetadata = () => {
-        setAudioTrack({
+        addAudioClip({
           id: crypto.randomUUID(),
           name: file.name,
           dataUrl,
@@ -642,31 +635,25 @@ export function Timeline() {
 
         <div className="mx-1 h-4 w-px bg-border" />
 
-        {/* Audio: add when empty, inline controls when present. Positioning is
-            done by dragging the clip on the lane below the frames. */}
-        {audioTrack ? (
-          <AudioControls />
-        ) : (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="Add audio"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="gap-1.5 text-muted-foreground"
-                >
-                  <HugeiconsIcon icon={VolumeHighIcon} strokeWidth={1.8} />
-                  Add audio
-                </Button>
-              }
-            />
-            <TooltipContent>
-              Add an audio track aligned to the timeline
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {/* Add appends a clip; per-clip controls live on each clip in the lane
+            below. Positioning is done by dragging the clip. */}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Add audio"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-1.5 text-muted-foreground"
+              >
+                <HugeiconsIcon icon={VolumeHighIcon} strokeWidth={1.8} />
+                Add audio
+              </Button>
+            }
+          />
+          <TooltipContent>Add an audio clip to the timeline</TooltipContent>
+        </Tooltip>
         {audioError && (
           <span
             role="alert"
@@ -786,14 +773,23 @@ export function Timeline() {
           </Tooltip>
         </div>
 
-        {/* Audio Track Timeline Alignment & Interactive Editing Bar */}
-        {audioTrack && (
-          <AudioTrackBar
-            audioTrack={audioTrack}
-            fps={fps}
-            updateAudioTrack={updateAudioTrack}
-            frameStepPx={FRAME_STEP_PX}
-          />
+        {/* Audio lane: all clips share one lane, positioned by start frame. */}
+        {audioClips.length > 0 && (
+          <div className="relative h-8 min-w-full rounded-md bg-muted/60 p-0.5 select-none">
+            {audioClips.map((clip) => (
+              <AudioClipBar
+                key={clip.id}
+                clip={clip}
+                fps={fps}
+                frameStepPx={FRAME_STEP_PX}
+                currentIndex={currentIndex}
+                updateClip={updateAudioClip}
+                duplicateClip={duplicateAudioClip}
+                splitClip={splitAudioClip}
+                removeClip={removeAudioClip}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

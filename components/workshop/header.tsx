@@ -102,7 +102,7 @@ export function WorkshopHeader() {
         gif: (frames, fps, size, onProgress) =>
           exportGif(frames, fps, size, onProgress, transparent),
         mp4: (frames, fps, size, onProgress) =>
-          exportMp4(frames, fps, size, onProgress, state.audioTrack),
+          exportMp4(frames, fps, size, onProgress, state.audioClips),
       }
       const run = runners[format]
       const preset = getStagePreset(state.stagePresetId)
@@ -142,7 +142,7 @@ export function WorkshopHeader() {
         title: state.title,
         fps: state.fps,
         stagePresetId: state.stagePresetId,
-        audioTrack: state.audioTrack,
+        audioClips: state.audioClips,
         frames: state.frames,
       })
       state.setProjectId(id)

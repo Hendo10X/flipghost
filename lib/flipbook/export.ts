@@ -141,7 +141,7 @@ export async function exportMp4(
   fps: number,
   size: ExportSize,
   onProgress: OnProgress,
-  audioTrack?: AudioTrack | null
+  audioClips: AudioTrack[] = []
 ): Promise<Blob> {
   // Fetching the ffmpeg core (~30MB) and rendering frames are independent.
   const [{ instance: ffmpeg, fetchFile }, canvases] = await Promise.all([
@@ -181,45 +181,78 @@ export async function exportMp4(
       "frame%04d.png",
     ]
 
-    const hasAudio = Boolean(audioTrack && !audioTrack.muted && audioTrack.dataUrl)
-    if (hasAudio && audioTrack) {
+    // Each audible clip becomes its own input: -ss/-t read the trimmed segment,
+    // then in the filter graph adelay positions it on the timeline and volume
+    // scales it. amix folds several clips into one track (normalize=0 so volumes
+    // sum rather than getting attenuated). A single clip skips amix.
+    const clips = (audioClips ?? []).filter(
+      (c) => !c.muted && c.dataUrl && c.volume > 0
+    )
+    const audioChains: string[] = []
+    let inputIndex = 1 // input 0 is the frame sequence
+    for (const clip of clips) {
+      let blob: Blob
       try {
-        const audioBlob = await (await fetch(audioTrack.dataUrl)).blob()
-        await ffmpeg.writeFile("input_audio", await fetchFile(audioBlob))
-
-        if (audioTrack.offset > 0) {
-          ffmpegArgs.push("-ss", String(audioTrack.offset))
-        }
-        // Honour the right-edge trim: read only the trimmed length so the
-        // exported audio matches what plays in the editor.
-        if (audioTrack.trimDuration && audioTrack.trimDuration > 0) {
-          ffmpegArgs.push("-t", String(audioTrack.trimDuration))
-        }
-        if (audioTrack.startFrame > 0) {
-          const delaySec = audioTrack.startFrame / fps
-          ffmpegArgs.push("-itsoffset", String(delaySec))
-        }
-        ffmpegArgs.push("-i", "input_audio")
+        blob = await (await fetch(clip.dataUrl)).blob()
       } catch (err) {
-        console.warn("Could not write audio to ffmpeg:", err)
+        console.warn("Could not fetch audio clip:", err)
+        continue
       }
+      const file = `input_audio_${inputIndex}`
+      await ffmpeg.writeFile(file, await fetchFile(blob))
+      if (clip.offset > 0) ffmpegArgs.push("-ss", String(clip.offset))
+      if (clip.trimDuration && clip.trimDuration > 0) {
+        ffmpegArgs.push("-t", String(clip.trimDuration))
+      }
+      ffmpegArgs.push("-i", file)
+      const delayMs = Math.max(0, Math.round((clip.startFrame / fps) * 1000))
+      const vol = Math.max(0, Math.min(1, clip.volume))
+      audioChains.push(
+        `[${inputIndex}:a]adelay=${delayMs}:all=1,volume=${vol}[a${audioChains.length}]`
+      )
+      inputIndex++
     }
+    const hasAudio = audioChains.length > 0
 
     const totalDurationSec = frames.length / fps
-
-    ffmpegArgs.push(
-      "-c:v",
-      "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      "-vf",
-      "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-      "-t",
-      String(totalDurationSec)
-    )
+    const scale = "scale=trunc(iw/2)*2:trunc(ih/2)*2"
 
     if (hasAudio) {
-      ffmpegArgs.push("-c:a", "aac", "-b:a", "192k")
+      const mix =
+        audioChains.length === 1
+          ? audioChains[0].replace(/\[a0\]$/, "[aout]")
+          : `${audioChains.join(";")};${audioChains
+              .map((_, i) => `[a${i}]`)
+              .join("")}amix=inputs=${audioChains.length}:normalize=0[aout]`
+      ffmpegArgs.push(
+        "-filter_complex",
+        `[0:v]${scale}[v];${mix}`,
+        "-map",
+        "[v]",
+        "-map",
+        "[aout]",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-t",
+        String(totalDurationSec)
+      )
+    } else {
+      ffmpegArgs.push(
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-vf",
+        scale,
+        "-t",
+        String(totalDurationSec)
+      )
     }
 
     ffmpegArgs.push("-movflags", "+faststart", "out.mp4")
