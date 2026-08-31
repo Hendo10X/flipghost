@@ -46,10 +46,13 @@ async function loadProject(
     .where(eq(frames.projectId, id))
     .orderBy(asc(frames.orderIndex))
 
-  let audioTrack = null
+  // The audio_track column stored a single clip object before multi-clip;
+  // normalise both the object and array shapes to an array.
+  let audioClips: InitialProject["audioClips"] = []
   if (project.audioTrack) {
     try {
-      audioTrack = JSON.parse(project.audioTrack)
+      const parsed = JSON.parse(project.audioTrack)
+      audioClips = Array.isArray(parsed) ? parsed : parsed ? [parsed] : []
     } catch {}
   }
 
@@ -58,7 +61,7 @@ async function loadProject(
     title: project.title,
     fps: project.fps,
     stagePresetId: project.resolution,
-    audioTrack,
+    audioClips,
     frames: frameRows.map((row) => ({
       id: crypto.randomUUID(),
       json: parseFrameJson(row.canvasDataUrl),

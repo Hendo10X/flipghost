@@ -26,7 +26,7 @@ export interface InitialProject {
   title: string
   fps: number
   stagePresetId: string
-  audioTrack?: AudioTrack | null
+  audioClips?: AudioTrack[]
   frames: Frame[]
 }
 
@@ -55,7 +55,7 @@ export function Editor({
           title: initialProject.title,
           fps: initialProject.fps,
           stagePresetId: initialProject.stagePresetId,
-          audioTrack: initialProject.audioTrack ?? null,
+          audioClips: initialProject.audioClips ?? [],
           frames: initialProject.frames,
           currentId: initialProject.frames[0].id,
           past: [],
@@ -151,7 +151,7 @@ export function Editor({
               title: s.title,
               fps: s.fps,
               stagePresetId: s.stagePresetId,
-              audioTrack: s.audioTrack,
+              audioClips: s.audioClips,
               frames: s.frames,
             })
             savedVersion = version
@@ -177,7 +177,7 @@ export function Editor({
           next.title !== previous.title ||
           next.fps !== previous.fps ||
           next.stagePresetId !== previous.stagePresetId ||
-          next.audioTrack !== previous.audioTrack
+          next.audioClips !== previous.audioClips
         ) {
           contentVersion++
         }

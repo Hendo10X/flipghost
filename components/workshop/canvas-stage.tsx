@@ -313,7 +313,7 @@ export function CanvasStage() {
   const frames = useFlipbook((s) => s.frames)
   const stagePresetId = useFlipbook((s) => s.stagePresetId)
   const pendingImport = useFlipbook((s) => s.pendingImport)
-  const audioTrack = useFlipbook((s) => s.audioTrack)
+  const audioClips = useFlipbook((s) => s.audioClips)
 
   const stage = getStagePreset(stagePresetId)
   // Scale that fits the stage in the viewport; zoom multiplies it.
@@ -713,47 +713,47 @@ export function CanvasStage() {
       state.frames.findIndex((f) => f.id === state.currentId)
     )
 
-    let audioEl: HTMLAudioElement | null = null
-    const track = state.audioTrack
-
-    if (track && track.dataUrl) {
-      audioEl = new Audio(track.dataUrl)
-      audioEl.volume = track.muted ? 0 : track.volume
+    // One <audio> element per clip so overlapping clips all play. Each is
+    // synced every tick, and volume is re-read live so changes apply instantly.
+    const els = new Map<string, { el: HTMLAudioElement; started: boolean }>()
+    for (const clip of state.audioClips) {
+      if (clip.dataUrl) {
+        els.set(clip.id, { el: new Audio(clip.dataUrl), started: false })
+      }
     }
 
-    let hasStartedAudio = false
-
     const syncAudio = (frameIndex: number) => {
-      if (!audioEl) return
-      const latestTrack = useFlipbook.getState().audioTrack
-      if (!latestTrack || !latestTrack.dataUrl) {
-        if (!audioEl.paused) audioEl.pause()
-        return
-      }
-
-      // Dynamically sync volume on every tick so volume changes take effect instantly
-      audioEl.volume = latestTrack.muted ? 0 : Math.max(0, Math.min(1, latestTrack.volume))
-
-      const targetTime = latestTrack.offset + (frameIndex - latestTrack.startFrame) / fps
-      const maxTime = latestTrack.trimDuration
-        ? Math.min(latestTrack.duration, latestTrack.offset + latestTrack.trimDuration)
-        : latestTrack.duration
-
-      if (
-        frameIndex >= latestTrack.startFrame &&
-        targetTime >= 0 &&
-        targetTime < maxTime
-      ) {
-        if (!hasStartedAudio || audioEl.paused || Math.abs(audioEl.currentTime - targetTime) > 0.35) {
-          audioEl.currentTime = Math.max(0, targetTime)
-          hasStartedAudio = true
+      const clips = useFlipbook.getState().audioClips
+      for (const [id, entry] of els) {
+        const clip = clips.find((c) => c.id === id)
+        const { el } = entry
+        if (!clip || !clip.dataUrl) {
+          if (!el.paused) el.pause()
+          continue
         }
-        if (audioEl.paused && audioEl.volume > 0) {
-          audioEl.play().catch(() => {})
-        }
-      } else {
-        if (!audioEl.paused) {
-          audioEl.pause()
+        el.volume = clip.muted ? 0 : Math.max(0, Math.min(1, clip.volume))
+        const targetTime = clip.offset + (frameIndex - clip.startFrame) / fps
+        const maxTime = clip.trimDuration
+          ? Math.min(clip.duration, clip.offset + clip.trimDuration)
+          : clip.duration
+        if (
+          frameIndex >= clip.startFrame &&
+          targetTime >= 0 &&
+          targetTime < maxTime
+        ) {
+          if (
+            !entry.started ||
+            el.paused ||
+            Math.abs(el.currentTime - targetTime) > 0.35
+          ) {
+            el.currentTime = Math.max(0, targetTime)
+            entry.started = true
+          }
+          if (el.paused && el.volume > 0) {
+            el.play().catch(() => {})
+          }
+        } else if (!el.paused) {
+          el.pause()
         }
       }
     }
@@ -771,8 +771,9 @@ export function CanvasStage() {
         img.style.visibility = "hidden"
       }
 
+      // Loop wrapped: let every clip re-seek from the top.
       if (activeIndex === 0 && index > 0) {
-        hasStartedAudio = false
+        for (const entry of els.values()) entry.started = false
       }
 
       syncAudio(activeIndex)
@@ -786,63 +787,64 @@ export function CanvasStage() {
 
     return () => {
       clearInterval(interval)
-      if (audioEl) {
-        const targetAudio = audioEl
-        audioEl = null
-        if (!targetAudio.paused) {
-          try {
-            const startVol = targetAudio.volume
-            let currentVol = startVol
-            const fadeTimer = setInterval(() => {
-              currentVol = Math.max(0, currentVol - startVol / 4)
-              targetAudio.volume = currentVol
-              if (currentVol <= 0.01) {
-                clearInterval(fadeTimer)
-                targetAudio.pause()
-                targetAudio.src = ""
-              }
-            }, 5)
-          } catch {
-            targetAudio.pause()
-            targetAudio.src = ""
-          }
-        } else {
-          targetAudio.src = ""
+      for (const { el } of els.values()) {
+        if (el.paused) {
+          el.src = ""
+          continue
         }
+        // Quick fade so stopping playback doesn't click.
+        const startVol = el.volume || 1
+        let currentVol = startVol
+        const fadeTimer = setInterval(() => {
+          currentVol = Math.max(0, currentVol - startVol / 4)
+          el.volume = currentVol
+          if (currentVol <= 0.01) {
+            clearInterval(fadeTimer)
+            el.pause()
+            el.src = ""
+          }
+        }, 5)
       }
     }
   }, [playing, fps])
 
-  // --- Audio scrub preview: plays a short burst of audio when stepping frames ---
+  // --- Audio scrub preview: a short burst from each clip covering this frame ---
   useEffect(() => {
-    if (playing || !audioTrack || audioTrack.muted || !audioTrack.dataUrl) return
+    if (playing || audioClips.length === 0) return
     const index = frames.findIndex((f) => f.id === currentId)
-    if (index < audioTrack.startFrame) return
-    const targetTime = audioTrack.offset + (index - audioTrack.startFrame) / fps
-    if (targetTime < 0 || targetTime >= audioTrack.duration) return
+    if (index < 0) return
 
-    let scrubAudio: HTMLAudioElement | null = new Audio(audioTrack.dataUrl)
-    scrubAudio.volume = audioTrack.volume
-    scrubAudio.currentTime = targetTime
-    scrubAudio.play().catch(() => {})
-
-    const timer = setTimeout(() => {
-      if (scrubAudio) {
-        scrubAudio.pause()
-        scrubAudio.src = ""
-        scrubAudio = null
+    const bursts: HTMLAudioElement[] = []
+    for (const clip of audioClips) {
+      if (clip.muted || !clip.dataUrl) continue
+      const targetTime = clip.offset + (index - clip.startFrame) / fps
+      const maxTime = clip.trimDuration
+        ? Math.min(clip.duration, clip.offset + clip.trimDuration)
+        : clip.duration
+      if (index < clip.startFrame || targetTime < 0 || targetTime >= maxTime) {
+        continue
       }
-    }, 150)
+      const el = new Audio(clip.dataUrl)
+      el.volume = Math.max(0, Math.min(1, clip.volume))
+      el.currentTime = targetTime
+      el.play().catch(() => {})
+      bursts.push(el)
+    }
+    if (bursts.length === 0) return
+
+    const stop = () => {
+      for (const el of bursts) {
+        el.pause()
+        el.src = ""
+      }
+    }
+    const timer = setTimeout(stop, 150)
 
     return () => {
       clearTimeout(timer)
-      if (scrubAudio) {
-        scrubAudio.pause()
-        scrubAudio.src = ""
-        scrubAudio = null
-      }
+      stop()
     }
-  }, [currentId, playing, audioTrack, fps, frames])
+  }, [currentId, playing, audioClips, fps, frames])
 
   return (
     // min-w-0: without it a flex child refuses to shrink below its content,

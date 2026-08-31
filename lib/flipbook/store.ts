@@ -146,8 +146,8 @@ interface FlipbookState {
   stagePresetId: string
   /** Data URL of an image waiting to be placed on the canvas. */
   pendingImport: string | null
-  /** Audio track aligned to the timeline, null if no audio added. */
-  audioTrack: AudioTrack | null
+  /** Audio clips on the single timeline lane. Empty when no audio added. */
+  audioClips: AudioTrack[]
   /** Cloud project id once saved; null means local scratch work. */
   projectId: string | null
   cloudStatus: "idle" | "saving" | "saved" | "error"
@@ -167,9 +167,11 @@ interface FlipbookState {
   setStagePreset: (id: string) => void
   requestImport: (dataUrl: string) => void
   clearPendingImport: () => void
-  setAudioTrack: (audio: AudioTrack | null) => void
-  updateAudioTrack: (partial: Partial<AudioTrack>) => void
-  removeAudioTrack: () => void
+  addAudioClip: (clip: AudioTrack) => void
+  updateAudioClip: (id: string, partial: Partial<AudioTrack>) => void
+  removeAudioClip: (id: string) => void
+  duplicateAudioClip: (id: string) => void
+  splitAudioClip: (id: string, atFrame: number) => void
   setTitle: (title: string) => void
   setTool: (tool: Tool) => void
   setBrushColor: (color: string) => void
@@ -216,7 +218,7 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   brushSize: 8,
   stagePresetId: "square",
   pendingImport: null,
-  audioTrack: null,
+  audioClips: [],
   projectId: null,
   cloudStatus: "idle",
   past: [],
@@ -249,12 +251,63 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
     set({ stagePresetId: getStagePreset(id).id }),
   requestImport: (dataUrl) => set({ pendingImport: dataUrl }),
   clearPendingImport: () => set({ pendingImport: null }),
-  setAudioTrack: (audioTrack) => set({ audioTrack }),
-  updateAudioTrack: (partial) =>
+  addAudioClip: (clip) => set((s) => ({ audioClips: [...s.audioClips, clip] })),
+  updateAudioClip: (id, partial) =>
     set((s) => ({
-      audioTrack: s.audioTrack ? { ...s.audioTrack, ...partial } : null,
+      audioClips: s.audioClips.map((c) =>
+        c.id === id ? { ...c, ...partial } : c
+      ),
     })),
-  removeAudioTrack: () => set({ audioTrack: null }),
+  removeAudioClip: (id) =>
+    set((s) => ({ audioClips: s.audioClips.filter((c) => c.id !== id) })),
+
+  /** The played length of a clip in seconds, after start-offset and trim. */
+  duplicateAudioClip: (id) =>
+    set((s) => {
+      const src = s.audioClips.find((c) => c.id === id)
+      if (!src) return s
+      const played = Math.min(
+        src.duration - src.offset,
+        src.trimDuration ?? src.duration - src.offset
+      )
+      // Drop the copy right after the original so they don't overlap.
+      const spanFrames = Math.max(1, Math.ceil(played * get().fps))
+      const copy: AudioTrack = {
+        ...src,
+        id: crypto.randomUUID(),
+        startFrame: src.startFrame + spanFrames,
+      }
+      return { audioClips: [...s.audioClips, copy] }
+    }),
+
+  splitAudioClip: (id, atFrame) =>
+    set((s) => {
+      const src = s.audioClips.find((c) => c.id === id)
+      if (!src) return s
+      const played = Math.min(
+        src.duration - src.offset,
+        src.trimDuration ?? src.duration - src.offset
+      )
+      const spanFrames = Math.max(1, Math.ceil(played * get().fps))
+      // Only split when the cut lands strictly inside the clip.
+      if (atFrame <= src.startFrame || atFrame >= src.startFrame + spanFrames) {
+        return s
+      }
+      const firstLen = (atFrame - src.startFrame) / get().fps
+      const left: AudioTrack = { ...src, trimDuration: firstLen }
+      const right: AudioTrack = {
+        ...src,
+        id: crypto.randomUUID(),
+        startFrame: atFrame,
+        offset: src.offset + firstLen,
+        trimDuration: played - firstLen,
+      }
+      return {
+        audioClips: s.audioClips
+          .map((c) => (c.id === id ? left : c))
+          .concat(right),
+      }
+    }),
   setTitle: (title) => set({ title }),
   setTool: (tool) => set({ tool }),
   setBrushColor: (brushColor) => set({ brushColor }),

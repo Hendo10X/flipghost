@@ -5,7 +5,7 @@ export interface SaveProjectInput {
   title: string
   fps: number
   stagePresetId: string
-  audioTrack?: AudioTrack | null
+  audioClips?: AudioTrack[]
   frames: Frame[]
 }
 
@@ -20,7 +20,7 @@ export async function saveProjectToCloud(
       title: input.title,
       fps: input.fps,
       stagePresetId: input.stagePresetId,
-      audioTrack: input.audioTrack ?? null,
+      audioClips: input.audioClips ?? [],
       frames: input.frames.map((frame, index) => ({
         orderIndex: index,
         json: frame.json ? JSON.stringify(frame.json) : null,
