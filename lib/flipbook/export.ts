@@ -190,6 +190,11 @@ export async function exportMp4(
         if (audioTrack.offset > 0) {
           ffmpegArgs.push("-ss", String(audioTrack.offset))
         }
+        // Honour the right-edge trim: read only the trimmed length so the
+        // exported audio matches what plays in the editor.
+        if (audioTrack.trimDuration && audioTrack.trimDuration > 0) {
+          ffmpegArgs.push("-t", String(audioTrack.trimDuration))
+        }
         if (audioTrack.startFrame > 0) {
           const delaySec = audioTrack.startFrame / fps
           ffmpegArgs.push("-itsoffset", String(delaySec))
