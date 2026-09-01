@@ -501,8 +501,22 @@ export function Timeline() {
   const updateAudioTrack = useFlipbook((s) => s.updateAudioTrack)
 
   const currentIndex = frames.findIndex((f) => f.id === currentId)
-  const dragIndex = useRef<number | null>(null)
+  // Reorder is driven by Pointer Events so it works with mouse, pen, and
+  // touch alike. On touch a quick swipe scrolls the strip and a tap selects;
+  // a press-and-hold lifts the frame, after which dragging reorders it.
+  const dragIndexRef = useRef<number | null>(null)
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null)
   const [dropIndex, setDropIndex] = useState<number | null>(null)
+  const pointerStartRef = useRef<{
+    x: number
+    y: number
+    index: number
+    id: number
+    type: string
+    el: HTMLElement
+  } | null>(null)
+  const longPressRef = useRef<number | null>(null)
+  const didDragRef = useRef(false)
   const stripRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const reducedMotion = usePrefersReducedMotion()
@@ -548,6 +562,135 @@ export function Timeline() {
   // Audio track calculations
   // Each frame card is size-16 (64px) + gap-2 (8px) = 72px total width step per frame
   const FRAME_STEP_PX = 72
+
+  // How far a mouse/pen may travel before a click becomes a drag, and how long
+  // a touch must rest in place before it lifts a frame instead of scrolling.
+  const DRAG_THRESHOLD_PX = 8
+  const TOUCH_HOLD_MS = 300
+
+  const clearLongPress = () => {
+    if (longPressRef.current !== null) {
+      window.clearTimeout(longPressRef.current)
+      longPressRef.current = null
+    }
+  }
+
+  // Which frame sits under a point, so a drag can track over cards it never
+  // received its own pointer events for (the origin card keeps pointer capture).
+  const indexFromPoint = (x: number, y: number) => {
+    const card = document
+      .elementFromPoint(x, y)
+      ?.closest<HTMLElement>("[data-frame-id]")
+    if (!card) return null
+    const idx = frames.findIndex((f) => f.id === card.dataset.frameId)
+    return idx >= 0 ? idx : null
+  }
+
+  const beginDrag = (index: number, el: HTMLElement, pointerId: number) => {
+    clearLongPress()
+    dragIndexRef.current = index
+    didDragRef.current = true
+    setDraggingIndex(index)
+    setDropIndex(index)
+    try {
+      el.setPointerCapture(pointerId)
+    } catch {}
+  }
+
+  const endDrag = (el: HTMLElement | null, pointerId: number) => {
+    clearLongPress()
+    if (el) {
+      try {
+        el.releasePointerCapture(pointerId)
+      } catch {}
+    }
+    dragIndexRef.current = null
+    pointerStartRef.current = null
+    setDraggingIndex(null)
+    setDropIndex(null)
+  }
+
+  const handleFramePointerDown = (e: React.PointerEvent, index: number) => {
+    // Ignore secondary mouse buttons; let them fall through to the browser.
+    if (e.pointerType === "mouse" && e.button !== 0) return
+    didDragRef.current = false
+    pointerStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      index,
+      id: e.pointerId,
+      type: e.pointerType,
+      el: e.currentTarget as HTMLElement,
+    }
+    if (e.pointerType === "touch") {
+      // Wait to see whether the finger rests (reorder) or moves (scroll/tap).
+      const el = e.currentTarget as HTMLElement
+      const pointerId = e.pointerId
+      clearLongPress()
+      longPressRef.current = window.setTimeout(() => {
+        if (pointerStartRef.current?.id === pointerId) {
+          beginDrag(index, el, pointerId)
+        }
+      }, TOUCH_HOLD_MS)
+    }
+  }
+
+  const handleFramePointerMove = (e: React.PointerEvent) => {
+    const start = pointerStartRef.current
+    if (!start || start.id !== e.pointerId) return
+    const movedX = Math.abs(e.clientX - start.x)
+    const movedY = Math.abs(e.clientY - start.y)
+
+    if (dragIndexRef.current === null) {
+      if (start.type === "touch") {
+        // Moved before the hold completed — this is a scroll or a tap, not a
+        // reorder. Stand down and let the strip scroll natively.
+        if (movedX > DRAG_THRESHOLD_PX || movedY > DRAG_THRESHOLD_PX) {
+          clearLongPress()
+          pointerStartRef.current = null
+        }
+        return
+      }
+      // Mouse/pen: a small movement promotes the press into a drag.
+      if (movedX > DRAG_THRESHOLD_PX || movedY > DRAG_THRESHOLD_PX) {
+        beginDrag(start.index, start.el, start.id)
+      } else {
+        return
+      }
+    }
+
+    // Active drag: track the card under the pointer.
+    e.preventDefault()
+    const over = indexFromPoint(e.clientX, e.clientY)
+    if (over !== null) setDropIndex(over)
+  }
+
+  const handleFramePointerUp = (e: React.PointerEvent) => {
+    const start = pointerStartRef.current
+    const from = dragIndexRef.current
+    if (from !== null) {
+      const to = dropIndex ?? from
+      if (to !== from) reorderFrames(from, to)
+    }
+    endDrag(start?.el ?? (e.currentTarget as HTMLElement), e.pointerId)
+  }
+
+  const handleFramePointerCancel = (e: React.PointerEvent) => {
+    const start = pointerStartRef.current
+    endDrag(start?.el ?? (e.currentTarget as HTMLElement), e.pointerId)
+  }
+
+  // While a frame is lifted, block native scrolling so a touch-drag reorders
+  // instead of panning the strip. A non-passive listener is required — calling
+  // preventDefault on a React pointermove alone does not stop an in-flight pan.
+  useEffect(() => {
+    if (draggingIndex === null) return
+    const prevent = (e: TouchEvent) => e.preventDefault()
+    document.addEventListener("touchmove", prevent, { passive: false })
+    return () => document.removeEventListener("touchmove", prevent)
+  }, [draggingIndex])
+
+  useEffect(() => clearLongPress, [])
 
   return (
     <div data-tour="timeline" className="flex flex-col gap-2 border-t px-4 py-3">
@@ -752,36 +895,26 @@ export function Timeline() {
               key={frame.id}
               type="button"
               data-frame-id={frame.id}
-              draggable
-              onDragStart={() => {
-                dragIndex.current = index
-              }}
-              onDragOver={(e) => {
-                e.preventDefault()
-                if (dragIndex.current !== null && dragIndex.current !== index) {
-                  setDropIndex(index)
+              onPointerDown={(e) => handleFramePointerDown(e, index)}
+              onPointerMove={handleFramePointerMove}
+              onPointerUp={handleFramePointerUp}
+              onPointerCancel={handleFramePointerCancel}
+              onClick={() => {
+                // A pointer sequence that turned into a drag must not also
+                // select — swallow the synthetic click it leaves behind.
+                if (didDragRef.current) {
+                  didDragRef.current = false
+                  return
                 }
+                selectFrame(frame.id)
               }}
-              onDragLeave={() => setDropIndex((d) => (d === index ? null : d))}
-              onDrop={(e) => {
-                e.preventDefault()
-                if (dragIndex.current !== null) {
-                  reorderFrames(dragIndex.current, index)
-                }
-                dragIndex.current = null
-                setDropIndex(null)
-              }}
-              onDragEnd={() => {
-                dragIndex.current = null
-                setDropIndex(null)
-              }}
-              onClick={() => selectFrame(frame.id)}
               aria-label={`Frame ${index + 1}`}
               aria-current={frame.id === currentId ? "true" : undefined}
               className={cn(
                 "relative size-16 shrink-0 cursor-grab overflow-hidden rounded-lg bg-white ring-1 ring-black/10 transition-shadow outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing dark:ring-white/15",
                 frame.id === currentId && "ring-2 ring-primary dark:ring-primary",
-                dropIndex === index && "ring-2 ring-ring"
+                dropIndex === index && draggingIndex !== index && "ring-2 ring-ring",
+                draggingIndex === index && "opacity-40 ring-2 ring-primary"
               )}
             >
               {frame.dataUrl && (
