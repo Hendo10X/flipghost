@@ -398,7 +398,31 @@ interface FlipbookState {
   redo: () => void
 }
 
-const initialFrame = blankFrame()
+/**
+ * Deterministic id for the initial blank frame. The store module is executed
+ * once during SSR and again on the client, so a random id here would make the
+ * server and client HTML differ and break hydration of anything keyed on it.
+ * Frames and layers created at runtime still get real UUIDs.
+ */
+const INITIAL_FRAME_ID = "00000000-0000-4000-8000-000000000000"
+const INITIAL_LAYER_ID = "00000000-0000-4000-8000-000000000001"
+
+const initialFrame: Frame = {
+  id: INITIAL_FRAME_ID,
+  json: null,
+  dataUrl: null,
+  layers: [
+    {
+      id: INITIAL_LAYER_ID,
+      name: "Layer 1",
+      hidden: false,
+      locked: false,
+      opacity: 1,
+      json: null,
+    },
+  ],
+  activeLayerId: INITIAL_LAYER_ID,
+}
 
 export const useFlipbook = create<FlipbookState>((set, get) => ({
   title: "Untitled Animation",

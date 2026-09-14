@@ -520,6 +520,7 @@ export function CanvasStage() {
       commitRef.current = commit
 
       canvas.on("path:created", ({ path }) => {
+        if (!canvas) return
         const state = useFlipbook.getState()
         const frame = ensureFrameLayers(
           state.frames.find((f) => f.id === state.currentId)!

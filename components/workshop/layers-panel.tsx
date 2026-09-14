@@ -66,7 +66,7 @@ export function LayersPanel() {
     () => ensureFrameLayers(frames.find((item) => item.id === currentId) ?? frames[0]),
     [frames, currentId]
   )
-  const layers = frame.layers ?? []
+  const layers = useMemo(() => frame.layers ?? [], [frame.layers])
   const activeIndex = activeLayerIndex(frame)
 
   // displayLayers: top-of-stack first (reversed from the internal bottom-to-top array)
@@ -240,7 +240,7 @@ export function LayersPanel() {
           onPointerMove={drag ? handlePointerMove : undefined}
           onPointerUp={drag ? handlePointerUp : undefined}
         >
-          {orderedDisplay.map(({ layer, index }, displayIdx) => {
+          {orderedDisplay.map(({ layer }, displayIdx) => {
             const selected = layer.id === frame.activeLayerId
             const count = objectCount(layer)
             const isDraggingThis = drag?.from === displayIdx
@@ -384,55 +384,61 @@ export function LayersPanel() {
                     )}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Tooltip delayDuration={200}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={layer.hidden ? "Show layer" : "Hide layer"}
-                          aria-pressed={!layer.hidden}
-                          onClick={() => toggleLayerHidden(layer.id)}
-                          className={cn(
-                            "size-7 rounded-md transition-colors",
-                            layer.hidden
-                              ? "bg-muted text-foreground hover:bg-muted/80 shadow-xs"
-                              : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
-                          )}
-                        >
-                          <HugeiconsIcon
-                            icon={layer.hidden ? EyeOffIcon : EyeIcon}
-                            size={14}
-                            strokeWidth={1.8}
-                          />
-                        </Button>
-                      </TooltipTrigger>
+                    <Tooltip>
+                      <TooltipTrigger
+                        delay={200}
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={layer.hidden ? "Show layer" : "Hide layer"}
+                            aria-pressed={!layer.hidden}
+                            onClick={() => toggleLayerHidden(layer.id)}
+                            className={cn(
+                              "size-7 rounded-md transition-colors",
+                              layer.hidden
+                                ? "bg-muted text-foreground hover:bg-muted/80 shadow-xs"
+                                : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                            )}
+                          >
+                            <HugeiconsIcon
+                              icon={layer.hidden ? EyeOffIcon : EyeIcon}
+                              size={14}
+                              strokeWidth={1.8}
+                            />
+                          </Button>
+                        }
+                      />
                       <TooltipContent side="top">
                         {layer.hidden ? "Show layer" : "Hide layer"}
                       </TooltipContent>
                     </Tooltip>
 
-                    <Tooltip delayDuration={200}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={layer.locked ? "Unlock layer" : "Lock layer"}
-                          aria-pressed={layer.locked}
-                          onClick={() => toggleLayerLocked(layer.id)}
-                          className={cn(
-                            "size-7 rounded-md transition-colors",
-                            layer.locked
-                              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 shadow-xs"
-                              : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
-                          )}
-                        >
-                          <HugeiconsIcon
-                            icon={layer.locked ? LockIcon : SquareUnlock01Icon}
-                            size={14}
-                            strokeWidth={1.8}
-                          />
-                        </Button>
-                      </TooltipTrigger>
+                    <Tooltip>
+                      <TooltipTrigger
+                        delay={200}
+                        render={
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={layer.locked ? "Unlock layer" : "Lock layer"}
+                            aria-pressed={layer.locked}
+                            onClick={() => toggleLayerLocked(layer.id)}
+                            className={cn(
+                              "size-7 rounded-md transition-colors",
+                              layer.locked
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 shadow-xs"
+                                : "text-muted-foreground hover:bg-background/80 hover:text-foreground"
+                            )}
+                          >
+                            <HugeiconsIcon
+                              icon={layer.locked ? LockIcon : SquareUnlock01Icon}
+                              size={14}
+                              strokeWidth={1.8}
+                            />
+                          </Button>
+                        }
+                      />
                       <TooltipContent side="top">
                         {layer.locked ? "Unlock layer" : "Lock layer"}
                       </TooltipContent>
