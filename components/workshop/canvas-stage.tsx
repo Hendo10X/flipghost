@@ -6,10 +6,16 @@ import { MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  activeLayer,
+  ensureFrameLayers,
   getStagePreset,
+  layeredFrameJSON,
   onionStepOpacity,
   SNAPSHOT_SIZE,
   useFlipbook,
+  type Frame,
+  type FrameJSON,
+  type FrameLayer,
   ZOOM_MAX,
   ZOOM_MIN,
 } from "@/lib/flipbook/store"
@@ -22,6 +28,8 @@ import {
 
 /** Padding around the stage inside the scrollable viewport (p-6 = 24px). */
 const VIEWPORT_PAD = 48
+const LAYER_ID_PROP = "fgLayerId"
+const LAYER_BASE_OPACITY_PROP = "fgBaseOpacity"
 
 /**
  * One ghosted neighbouring frame layered under the drawing surface.
@@ -289,6 +297,123 @@ function brushCursor(diameter: number) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`
 }
 
+function objectLayerId(object: unknown): string | undefined {
+  return (object as Record<string, unknown>)[LAYER_ID_PROP] as string | undefined
+}
+
+function layerJSONFromObjects(
+  base: FrameJSON | null,
+  objects: Record<string, unknown>[]
+): FrameJSON | null {
+  if (objects.length === 0) return null
+  return { ...(base ?? {}), objects }
+}
+
+function splitVisibleCanvasIntoLayers(
+  frame: Frame,
+  canvasJSON: FrameJSON
+): FrameLayer[] {
+  const normalized = ensureFrameLayers(frame)
+  const canvasObjects = Array.isArray(canvasJSON.objects)
+    ? (canvasJSON.objects as Record<string, unknown>[])
+    : []
+  const objectsByLayer = new Map<string, Record<string, unknown>[]>()
+
+  for (const object of canvasObjects) {
+    const rawId = objectLayerId(object)
+    const id =
+      rawId && normalized.layers?.some((l) => l.id === rawId)
+        ? rawId
+        : normalized.activeLayerId
+    if (!id) continue
+    const clean = { ...object }
+    if (typeof clean[LAYER_BASE_OPACITY_PROP] === "number") {
+      clean.opacity = clean[LAYER_BASE_OPACITY_PROP]
+    }
+    delete clean[LAYER_ID_PROP]
+    delete clean[LAYER_BASE_OPACITY_PROP]
+    const bucket = objectsByLayer.get(id) ?? []
+    bucket.push(clean)
+    objectsByLayer.set(id, bucket)
+  }
+
+  return (normalized.layers ?? []).map((layer) => {
+    if (layer.hidden) return layer
+    return {
+      ...layer,
+      json: layerJSONFromObjects(layer.json, objectsByLayer.get(layer.id) ?? []),
+    }
+  })
+}
+
+function enforceLayerStackingOrder(canvas: Canvas, frame: Frame) {
+  const normalized = ensureFrameLayers(frame)
+  const layers = normalized.layers ?? []
+  if (layers.length <= 1) return
+
+  const layerIndexMap = new Map<string, number>()
+  layers.forEach((l, idx) => layerIndexMap.set(l.id, idx))
+
+  const canvasInternal = canvas as unknown as { _objects: Record<string, unknown>[] }
+  const objects = canvasInternal._objects
+  if (!Array.isArray(objects) || objects.length <= 1) return
+
+  let changed = false
+  const indexed = objects.map((obj, i) => {
+    const lId = objectLayerId(obj)
+    const lIdx =
+      lId !== undefined && layerIndexMap.has(lId)
+        ? layerIndexMap.get(lId)!
+        : layers.length - 1
+    const isFillImage =
+      (obj as { isType?: (type: string) => boolean }).isType?.("Image") ||
+      (obj as { type?: string }).type?.toLowerCase() === "image"
+    const subTypeRank = isFillImage ? 0 : 1
+    return { obj, lIdx, subTypeRank, originalIdx: i }
+  })
+
+  indexed.sort((a, b) => {
+    if (a.lIdx !== b.lIdx) return a.lIdx - b.lIdx
+    if (a.subTypeRank !== b.subTypeRank) return a.subTypeRank - b.subTypeRank
+    return a.originalIdx - b.originalIdx
+  })
+
+  for (let i = 0; i < objects.length; i++) {
+    if (objects[i] !== indexed[i].obj) {
+      changed = true
+      break
+    }
+  }
+
+  if (changed) {
+    for (let i = 0; i < indexed.length; i++) {
+      objects[i] = indexed[i].obj
+    }
+    canvas.requestRenderAll()
+  }
+}
+
+function applyLayerEditability(canvas: Canvas, frame: Frame, tool: string) {
+  const normalized = ensureFrameLayers(frame)
+  const currentLayer = activeLayer(normalized)
+  const activeId = normalized.activeLayerId
+  const canEditLayer = Boolean(currentLayer && !currentLayer.locked && !currentLayer.hidden)
+
+  canvas.forEachObject((obj) => {
+    const editable =
+      canEditLayer && objectLayerId(obj) === activeId && tool === "select"
+    obj.set({
+      selectable: editable,
+      evented: canEditLayer && objectLayerId(obj) === activeId,
+      perPixelTargetFind: true,
+    })
+  })
+
+  if (!canEditLayer || tool !== "select") {
+    canvas.discardActiveObject()
+  }
+}
+
 export function CanvasStage() {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasElRef = useRef<HTMLCanvasElement>(null)
@@ -298,6 +423,14 @@ export function CanvasStage() {
   const [container, setContainer] = useState({ width: 0, height: 0 })
 
   const currentId = useFlipbook((s) => s.currentId)
+  const activeLayerId = useFlipbook((s) => {
+    const current = s.frames.find((f) => f.id === s.currentId)
+    return current?.activeLayerId
+  })
+  const layerOrderKey = useFlipbook((s) => {
+    const current = s.frames.find((f) => f.id === s.currentId)
+    return current?.layers?.map((l) => l.id).join(",")
+  })
   const revision = useFlipbook((s) => s.revision)
   const tool = useFlipbook((s) => s.tool)
   const brushColor = useFlipbook((s) => s.brushColor)
@@ -345,11 +478,13 @@ export function CanvasStage() {
     let canvas: Canvas | null = null
 
     async function init() {
-      const [{ Canvas, FabricImage }, { PressureBrush }] = await Promise.all([
+      const [{ Canvas, FabricImage, FabricObject }, { PressureBrush }] = await Promise.all([
         import("fabric"),
         import("@/lib/flipbook/pressure-brush"),
       ])
       if (disposed || !canvasElRef.current) return
+
+      FabricObject.customProperties = [LAYER_ID_PROP, LAYER_BASE_OPACITY_PROP]
 
       canvas = new Canvas(canvasElRef.current, {
         isDrawingMode: true,
@@ -367,20 +502,40 @@ export function CanvasStage() {
       const commit = () => {
         if (!canvas) return
         const state = useFlipbook.getState()
-        const json = canvas.toJSON() as Record<string, unknown>
+        const frame = state.frames.find((f) => f.id === state.currentId)
+        if (!frame) return
+        enforceLayerStackingOrder(canvas, frame)
+        const json = (
+          canvas as unknown as { toObject: (propertiesToInclude: string[]) => unknown }
+        ).toObject([LAYER_ID_PROP, LAYER_BASE_OPACITY_PROP]) as FrameJSON
+        const layers = splitVisibleCanvasIntoLayers(frame, json)
+        const compositeFrame = ensureFrameLayers({ ...frame, layers })
+        const compositeJSON = layeredFrameJSON(compositeFrame)
         const dataUrl = canvas.toDataURL({
           format: "png",
           multiplier: SNAPSHOT_SIZE / canvas.getWidth(),
         })
-        state.commitFrame(state.currentId, json, dataUrl)
+        state.commitFrame(state.currentId, compositeJSON, dataUrl, layers)
       }
       commitRef.current = commit
 
       canvas.on("path:created", ({ path }) => {
+        if (!canvas) return
+        const state = useFlipbook.getState()
+        const frame = ensureFrameLayers(
+          state.frames.find((f) => f.id === state.currentId)!
+        )
+        const layer = activeLayer(frame)
+        const baseOpacity = path.opacity ?? 1
         path.set({
-          selectable: useFlipbook.getState().tool === "select",
+          [LAYER_ID_PROP]: frame.activeLayerId,
+          [LAYER_BASE_OPACITY_PROP]: baseOpacity,
+          opacity: baseOpacity * (layer?.opacity ?? 1),
+          selectable: state.tool === "select" && !layer?.locked && !layer?.hidden,
+          evented: !layer?.locked && !layer?.hidden,
           perPixelTargetFind: true,
         })
+        enforceLayerStackingOrder(canvas, frame)
         commit()
       })
 
@@ -393,8 +548,14 @@ export function CanvasStage() {
 
       const tryErase = (opt: TPointerEventInfo) => {
         if (!canvas) return
+        const state = useFlipbook.getState()
+        const frame = ensureFrameLayers(
+          state.frames.find((f) => f.id === state.currentId)!
+        )
+        const layer = activeLayer(frame)
+        if (layer?.locked || layer?.hidden) return
         const { target } = canvas.findTarget(opt.e)
-        if (target) {
+        if (target && objectLayerId(target) === frame.activeLayerId) {
           canvas.remove(target)
           erasedAny = true
           canvas.requestRenderAll()
@@ -416,6 +577,14 @@ export function CanvasStage() {
       canvas.on("mouse:down", async (opt) => {
         if (!canvas || useFlipbook.getState().tool !== "bucket") return
         const state = useFlipbook.getState()
+        const frame = ensureFrameLayers(
+          state.frames.find((f) => f.id === state.currentId)!
+        )
+        const layer = activeLayer(frame)
+        if (layer?.locked || layer?.hidden) {
+          state.setTool("brush")
+          return
+        }
         const stagePreset = getStagePreset(state.stagePresetId)
 
         const filledCanvas = floodFillCanvas(
@@ -431,7 +600,8 @@ export function CanvasStage() {
             .getObjects()
             .filter(
               (obj) =>
-                obj.isType("Image", "image") || obj.type?.toLowerCase() === "image"
+                objectLayerId(obj) === frame.activeLayerId &&
+                (obj.isType("Image", "image") || obj.type?.toLowerCase() === "image")
             )
 
           const compositeCanvas = document.createElement("canvas")
@@ -465,11 +635,19 @@ export function CanvasStage() {
             scaleX: stagePreset.width / compositeCanvas.width,
             scaleY: stagePreset.height / compositeCanvas.height,
             selectable: state.tool === "select",
+            evented: true,
             perPixelTargetFind: true,
+          })
+          const baseOpacity = img.opacity ?? 1
+          img.set({
+            [LAYER_ID_PROP]: frame.activeLayerId,
+            [LAYER_BASE_OPACITY_PROP]: baseOpacity,
+            opacity: baseOpacity * (layer?.opacity ?? 1),
           })
 
           canvas.remove(...existingFillImages)
-          canvas.insertAt(0, img)
+          canvas.add(img)
+          enforceLayerStackingOrder(canvas, frame)
           canvas.requestRenderAll()
           commit()
         }
@@ -554,6 +732,14 @@ export function CanvasStage() {
       const image = await FabricImage.fromURL(pendingImport!)
       if (cancelled || !canvas) return
       const state = useFlipbook.getState()
+      const frame = ensureFrameLayers(
+        state.frames.find((f) => f.id === state.currentId)!
+      )
+      const layer = activeLayer(frame)
+      if (layer?.locked || layer?.hidden) {
+        state.clearPendingImport()
+        return
+      }
       const { width: stageW, height: stageH } = getStagePreset(
         state.stagePresetId
       )
@@ -568,9 +754,17 @@ export function CanvasStage() {
         left: (stageW - (image.width || 0) * fit) / 2,
         top: (stageH - (image.height || 0) * fit) / 2,
         selectable: state.tool === "select",
+        evented: true,
         perPixelTargetFind: true,
       })
+      const baseOpacity = image.opacity ?? 1
+      image.set({
+        [LAYER_ID_PROP]: frame.activeLayerId,
+        [LAYER_BASE_OPACITY_PROP]: baseOpacity,
+        opacity: baseOpacity * (layer?.opacity ?? 1),
+      })
       canvas.add(image)
+      enforceLayerStackingOrder(canvas, frame)
       canvas.requestRenderAll()
       commitRef.current?.()
       state.clearPendingImport()
@@ -582,11 +776,29 @@ export function CanvasStage() {
     }
   }, [pendingImport, ready])
 
+  // Immediately sync canvas stacking when layer order changes in the UI
+  useEffect(() => {
+    const canvas = fabricRef.current
+    if (!canvas || !ready) return
+    const state = useFlipbook.getState()
+    const frame = state.frames.find((f) => f.id === state.currentId)
+    if (frame) {
+      enforceLayerStackingOrder(canvas, ensureFrameLayers(frame))
+    }
+  }, [layerOrderKey, ready])
+
   // --- Tool & brush settings ---
   useEffect(() => {
     const canvas = fabricRef.current
     if (!canvas || !ready) return
-    if (tool === "brush") {
+    const state = useFlipbook.getState()
+    const frame = ensureFrameLayers(
+      state.frames.find((f) => f.id === state.currentId)!
+    )
+    const layer = activeLayer(frame)
+    const canEditLayer = Boolean(layer && !layer.locked && !layer.hidden)
+
+    if (tool === "brush" && canEditLayer) {
       canvas.isDrawingMode = true
       canvas.selection = false
     } else if (tool === "eraser" || tool === "eyedropper" || tool === "bucket") {
@@ -600,18 +812,13 @@ export function CanvasStage() {
       canvas.defaultCursor = "default"
       canvas.hoverCursor = "move"
     }
-    canvas.forEachObject((obj) => {
-      obj.set({ selectable: tool === "select" })
-    })
-    if (tool !== "select") {
-      canvas.discardActiveObject()
-    }
+    applyLayerEditability(canvas, frame, tool)
     canvas.requestRenderAll()
     if (canvas.freeDrawingBrush) {
       canvas.freeDrawingBrush.color = brushColor
       canvas.freeDrawingBrush.width = brushSize
     }
-  }, [tool, brushColor, brushSize, ready])
+  }, [tool, brushColor, brushSize, currentId, activeLayerId, revision, ready])
 
   // --- Brush cursor: a ring matching the stroke it will lay down ---
   useEffect(() => {
@@ -629,9 +836,17 @@ export function CanvasStage() {
       const target = e.target as HTMLElement | null
       if (target?.closest("input, textarea, [contenteditable=true]")) return
       if (useFlipbook.getState().tool !== "select") return
+      const state = useFlipbook.getState()
+      const frame = ensureFrameLayers(
+        state.frames.find((f) => f.id === state.currentId)!
+      )
+      const layer = activeLayer(frame)
+      if (layer?.locked || layer?.hidden) return
 
       if (e.key === "Delete" || e.key === "Backspace") {
-        const selected = canvas.getActiveObjects()
+        const selected = canvas
+          .getActiveObjects()
+          .filter((obj) => objectLayerId(obj) === frame.activeLayerId)
         if (selected.length === 0) return
         e.preventDefault()
         canvas.discardActiveObject()
@@ -668,26 +883,38 @@ export function CanvasStage() {
       const state = useFlipbook.getState()
       const frame = state.frames.find((f) => f.id === state.currentId)
       canvas.clear()
-      if (frame?.json) {
+      const json = frame ? layeredFrameJSON(frame) : null
+      if (json) {
         try {
-          await canvas.loadFromJSON(frame.json as object, undefined, {
-            signal: controller.signal,
-          })
+          await canvas.loadFromJSON(
+            json as object,
+            (serializedObj, instance) => {
+              if (instance && serializedObj) {
+                const layerId = (serializedObj as Record<string, unknown>)[LAYER_ID_PROP]
+                if (layerId) {
+                  ;(instance as unknown as Record<string, unknown>)[LAYER_ID_PROP] = layerId
+                }
+                const baseOpacity = (serializedObj as Record<string, unknown>)[LAYER_BASE_OPACITY_PROP]
+                if (typeof baseOpacity === "number") {
+                  ;(instance as unknown as Record<string, unknown>)[LAYER_BASE_OPACITY_PROP] = baseOpacity
+                }
+              }
+            },
+            {
+              signal: controller.signal,
+            }
+          )
         } catch {
           // Aborted, or an unreadable frame. Either way a newer load owns the
           // canvas now and this one must not draw over it.
           return
         }
-        canvas.forEachObject((obj) => {
-          obj.set({
-            selectable: state.tool === "select",
-            perPixelTargetFind: true,
-          })
-        })
+        enforceLayerStackingOrder(canvas, ensureFrameLayers(frame!))
+        applyLayerEditability(canvas, ensureFrameLayers(frame!), state.tool)
       }
       canvas.requestRenderAll()
       // Undo/redo drops the cached snapshot; rebuild it from the canvas.
-      if (frame && frame.dataUrl === null && frame.json !== null) {
+      if (frame && frame.dataUrl === null && json !== null) {
         state.setFrameSnapshot(
           frame.id,
           canvas.toDataURL({

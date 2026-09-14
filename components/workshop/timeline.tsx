@@ -18,6 +18,7 @@ import { FPS_OPTIONS, ONION_MAX, useFlipbook, type AudioTrack } from "@/lib/flip
 import { usePrefersReducedMotion } from "@/lib/use-reduced-motion"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { LayersPanel } from "@/components/workshop/layers-panel"
 import {
   Popover,
   PopoverContent,
@@ -677,6 +678,7 @@ export function Timeline() {
         )}
 
         <div className="ml-auto flex items-center gap-1">
+          <LayersPanel />
           <Tooltip>
             <TooltipTrigger
               render={
