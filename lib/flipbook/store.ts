@@ -56,12 +56,24 @@ export type Tool = "brush" | "eraser" | "select" | "eyedropper" | "bucket"
 
 export type FrameJSON = Record<string, unknown>
 
+export interface FrameLayer {
+  id: string
+  name: string
+  /** Stored bottom-to-top; hidden layers are skipped when the frame renders. */
+  hidden: boolean
+  locked: boolean
+  opacity: number
+  json: FrameJSON | null
+}
+
 export interface Frame {
   id: string
   /** Serialized Fabric.js canvas state, null for a blank frame. */
   json: FrameJSON | null
   /** PNG snapshot (transparent background) used for thumbs/onion/playback. */
   dataUrl: string | null
+  layers?: FrameLayer[]
+  activeLayerId?: string
 }
 
 export interface AudioTrack {
@@ -97,9 +109,30 @@ interface HistoryEntry {
 }
 
 const HISTORY_LIMIT = 50
+const SAVED_LAYERS_PROP = "fgLayers"
+const SAVED_ACTIVE_LAYER_PROP = "fgActiveLayerId"
 
-function blankFrame(): Frame {
-  return { id: crypto.randomUUID(), json: null, dataUrl: null }
+function blankLayer(index = 1): FrameLayer {
+  return {
+    id: crypto.randomUUID(),
+    name: `Layer ${index}`,
+    hidden: false,
+    locked: false,
+    opacity: 1,
+    json: null,
+  }
+}
+
+function blankFrame(layers?: FrameLayer[], activeLayerId?: string): Frame {
+  const frameLayers =
+    layers?.map((layer) => ({ ...layer, json: null })) ?? [blankLayer()]
+  return {
+    id: crypto.randomUUID(),
+    json: null,
+    dataUrl: null,
+    layers: frameLayers,
+    activeLayerId: activeLayerId ?? frameLayers[frameLayers.length - 1].id,
+  }
 }
 
 function entryOf(state: { frames: Frame[]; currentId: string }): HistoryEntry {
@@ -118,6 +151,160 @@ function recording(
     ...next,
     past: [...state.past, entryOf(state)].slice(-HISTORY_LIMIT),
     future: [],
+  }
+}
+
+function cloneJSON<T>(value: T): T {
+  return structuredClone(value)
+}
+
+function jsonObjects(json: FrameJSON | null): Record<string, unknown>[] {
+  const objects = json?.objects
+  return Array.isArray(objects) ? (objects as Record<string, unknown>[]) : []
+}
+
+function withObjects(
+  base: FrameJSON | null,
+  objects: Record<string, unknown>[]
+): FrameJSON | null {
+  if (objects.length === 0) return null
+  return { ...(base ?? {}), objects }
+}
+
+export function ensureFrameLayers(frame: Frame): Frame {
+  if (frame.layers?.length) {
+    const activeLayerId =
+      frame.activeLayerId && frame.layers.some((layer) => layer.id === frame.activeLayerId)
+        ? frame.activeLayerId
+        : frame.layers[frame.layers.length - 1].id
+    return { ...frame, activeLayerId }
+  }
+
+  const savedLayers = frame.json?.[SAVED_LAYERS_PROP]
+  if (Array.isArray(savedLayers) && savedLayers.length) {
+    const layers = savedLayers as FrameLayer[]
+    const savedActive = frame.json?.[SAVED_ACTIVE_LAYER_PROP]
+    const activeLayerId =
+      typeof savedActive === "string" &&
+      layers.some((layer) => layer.id === savedActive)
+        ? savedActive
+        : layers[layers.length - 1].id
+    return {
+      ...frame,
+      layers,
+      activeLayerId,
+    }
+  }
+
+  const layer = blankLayer()
+  return {
+    ...frame,
+    layers: [{ ...layer, json: frame.json }],
+    activeLayerId: layer.id,
+  }
+}
+
+function layerTemplate(frame: Frame): FrameLayer[] {
+  return (ensureFrameLayers(frame).layers ?? []).map((layer) => ({
+    ...layer,
+    json: null,
+  }))
+}
+
+function alignFrameLayers(
+  frame: Frame,
+  template: FrameLayer[],
+  activeLayerId?: string
+): Frame {
+  const normalized = ensureFrameLayers(frame)
+  const existing = normalized.layers ?? []
+  const layers = template.map((layer, index) => {
+    const match = existing.find((item) => item.id === layer.id) ?? existing[index]
+    return {
+      ...layer,
+      json: match?.json ? cloneJSON(match.json) : null,
+    }
+  })
+  return withComposite({
+    ...normalized,
+    layers,
+    activeLayerId: activeLayerId ?? normalized.activeLayerId ?? layers[layers.length - 1].id,
+  }, null)
+}
+
+export function normalizeFramesLayers(frames: Frame[]): Frame[] {
+  if (!frames.length) return [blankFrame()]
+  const normalized = frames.map(ensureFrameLayers)
+  const source = normalized.reduce((best, frame) =>
+    (frame.layers?.length ?? 0) > (best.layers?.length ?? 0) ? frame : best
+  )
+  const template = layerTemplate(source)
+  const activeLayerId =
+    source.activeLayerId && template.some((layer) => layer.id === source.activeLayerId)
+      ? source.activeLayerId
+      : template[template.length - 1].id
+  return normalized.map((frame) => alignFrameLayers(frame, template, activeLayerId))
+}
+
+export function frameJSONForStorage(frame: Frame): FrameJSON | null {
+  const normalized = ensureFrameLayers(frame)
+  const json = layeredFrameJSON(normalized) ?? {}
+  return {
+    ...json,
+    [SAVED_LAYERS_PROP]: normalized.layers ?? [],
+    [SAVED_ACTIVE_LAYER_PROP]: normalized.activeLayerId,
+  }
+}
+
+export function layerCount(frame: Frame): number {
+  return ensureFrameLayers(frame).layers?.length ?? 1
+}
+
+export function activeLayerIndex(frame: Frame): number {
+  const normalized = ensureFrameLayers(frame)
+  const index =
+    normalized.layers?.findIndex((layer) => layer.id === normalized.activeLayerId) ?? 0
+  return index >= 0 ? index : 0
+}
+
+export function activeLayer(frame: Frame): FrameLayer | null {
+  const normalized = ensureFrameLayers(frame)
+  return (
+    normalized.layers?.find((layer) => layer.id === normalized.activeLayerId) ??
+    normalized.layers?.[0] ??
+    null
+  )
+}
+
+export function layeredFrameJSON(frame: Frame): FrameJSON | null {
+  const normalized = ensureFrameLayers(frame)
+  const layers = normalized.layers ?? []
+  if (!layers.length) return normalized.json
+
+  const base = normalized.json ?? layers.find((layer) => layer.json)?.json ?? null
+  const objects = layers.flatMap((layer) => {
+    if (layer.hidden) return []
+    return jsonObjects(layer.json).map((object) => {
+      const baseOpacity =
+        typeof object.opacity === "number" && Number.isFinite(object.opacity)
+          ? object.opacity
+          : 1
+      return {
+        ...cloneJSON(object),
+        opacity: baseOpacity * layer.opacity,
+        fgLayerId: layer.id,
+        fgBaseOpacity: baseOpacity,
+      }
+    })
+  })
+  return withObjects(base, objects)
+}
+
+function withComposite(frame: Frame, dataUrl: string | null = frame.dataUrl): Frame {
+  return {
+    ...frame,
+    json: layeredFrameJSON(frame),
+    dataUrl,
   }
 }
 
@@ -189,10 +376,24 @@ interface FlipbookState {
   reorderFrames: (fromIndex: number, toIndex: number) => void
 
   /** Record a canvas-driven change (stroke drawn, stroke erased). */
-  commitFrame: (id: string, json: FrameJSON, dataUrl: string | null) => void
+  commitFrame: (
+    id: string,
+    json: FrameJSON | null,
+    dataUrl: string | null,
+    layers?: FrameLayer[]
+  ) => void
   /** Refresh a frame's snapshot without touching history (after undo/redo). */
   setFrameSnapshot: (id: string, dataUrl: string | null) => void
   clearFrame: () => void
+  addLayer: () => void
+  duplicateLayer: () => void
+  deleteLayer: () => void
+  renameLayer: (id: string, name: string) => void
+  selectLayer: (id: string) => void
+  reorderLayers: (fromIndex: number, toIndex: number) => void
+  toggleLayerHidden: (id: string) => void
+  toggleLayerLocked: (id: string) => void
+  setLayerOpacity: (id: string, opacity: number) => void
   undo: () => void
   redo: () => void
 }
@@ -277,7 +478,8 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   addFrame: () =>
     set((s) => {
       const index = s.frames.findIndex((f) => f.id === s.currentId)
-      const frame = blankFrame()
+      const current = ensureFrameLayers(s.frames[index])
+      const frame = blankFrame(layerTemplate(current), current.activeLayerId)
       const frames = [...s.frames]
       frames.splice(index + 1, 0, frame)
       return recording(s, { frames, currentId: frame.id })
@@ -286,11 +488,16 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
   duplicateFrame: () =>
     set((s) => {
       const index = s.frames.findIndex((f) => f.id === s.currentId)
-      const source = s.frames[index]
+      const source = ensureFrameLayers(s.frames[index])
       const copy: Frame = {
         id: crypto.randomUUID(),
         json: source.json ? structuredClone(source.json) : null,
         dataUrl: source.dataUrl,
+        layers: source.layers?.map((layer) => ({
+          ...layer,
+          json: layer.json ? cloneJSON(layer.json) : null,
+        })),
+        activeLayerId: source.activeLayerId,
       }
       const frames = [...s.frames]
       frames.splice(index + 1, 0, copy)
@@ -303,7 +510,8 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
 
       // Deleting the only frame leaves a blank one rather than no canvas.
       if (s.frames.length === 1) {
-        const frame = blankFrame()
+        const current = ensureFrameLayers(s.frames[0])
+        const frame = blankFrame(layerTemplate(current), current.activeLayerId)
         return recording(s, { frames: [frame], currentId: frame.id })
       }
       const frames = s.frames.filter((f) => f.id !== s.currentId)
@@ -328,12 +536,14 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
       return recording(s, { frames })
     }),
 
-  commitFrame: (id, json, dataUrl) =>
+  commitFrame: (id, json, dataUrl, layers) =>
     set((s) => {
       const frame = s.frames.find((f) => f.id === id)
       if (!frame) return s
       return recording(s, {
-        frames: s.frames.map((f) => (f.id === id ? { ...f, json, dataUrl } : f)),
+        frames: s.frames.map((f) =>
+          f.id === id ? { ...ensureFrameLayers(f), json, dataUrl, layers } : f
+        ),
       })
     }),
 
@@ -344,13 +554,204 @@ export const useFlipbook = create<FlipbookState>((set, get) => ({
 
   clearFrame: () =>
     set((s) => {
-      const frame = s.frames.find((f) => f.id === s.currentId)
-      if (!frame || (!frame.json && !frame.dataUrl)) return s
+      const frame = ensureFrameLayers(
+        s.frames.find((f) => f.id === s.currentId) ?? blankFrame()
+      )
+      const layer = activeLayer(frame)
+      if (!layer || layer.locked || (!layer.json && !frame.dataUrl)) return s
+      const layers = frame.layers?.map((item) =>
+        item.id === layer.id ? { ...item, json: null } : item
+      )
+      const nextFrame = withComposite({ ...frame, layers }, null)
       return {
         ...recording(s, {
-          frames: s.frames.map((f) =>
-            f.id === s.currentId ? { ...f, json: null, dataUrl: null } : f
-          ),
+          frames: s.frames.map((f) => (f.id === s.currentId ? nextFrame : f)),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  addLayer: () =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const layer = blankLayer((frame.layers?.length ?? 0) + 1)
+      const template = [...layerTemplate(frame), layer]
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => alignFrameLayers(f, template, layer.id)),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  duplicateLayer: () =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const layers = frame.layers ?? []
+      const index = layers.findIndex((layer) => layer.id === frame.activeLayerId)
+      const source = layers[index]
+      if (!source) return s
+      const copyId = crypto.randomUUID()
+      const template = [...layerTemplate(frame)]
+      template.splice(index + 1, 0, {
+        ...template[index],
+        id: copyId,
+        name: `${source.name} copy`,
+        json: null,
+      })
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => {
+            const normalized = ensureFrameLayers(f)
+            const frameLayers = normalized.layers ?? []
+            const sourceLayer =
+              frameLayers.find((layer) => layer.id === source.id) ?? frameLayers[index]
+            const nextLayers = template.map((layer) => ({
+              ...layer,
+              json:
+                layer.id === copyId
+                  ? sourceLayer?.json
+                    ? cloneJSON(sourceLayer.json)
+                    : null
+                  : frameLayers.find((item) => item.id === layer.id)?.json ?? null,
+            }))
+            return withComposite({
+              ...normalized,
+              layers: nextLayers,
+              activeLayerId: copyId,
+            }, null)
+          }),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  deleteLayer: () =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const layers = frame.layers ?? []
+      if (layers.length <= 1) {
+        const layer = { ...layers[0], json: null, hidden: false, locked: false, opacity: 1 }
+        return {
+          ...recording(s, {
+            frames: s.frames.map((f) =>
+              withComposite({ ...ensureFrameLayers(f), layers: [layer], activeLayerId: layer.id }, null)
+            ),
+          }),
+          revision: s.revision + 1,
+        }
+      }
+      const index = layers.findIndex((layer) => layer.id === frame.activeLayerId)
+      const template = layerTemplate(frame).filter((layer) => layer.id !== frame.activeLayerId)
+      const nextActiveId = template[Math.min(Math.max(index, 0), template.length - 1)].id
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => alignFrameLayers(f, template, nextActiveId)),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  renameLayer: (id, name) =>
+    set((s) => {
+      const trimmed = name.trim()
+      if (!trimmed) return s
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const template = layerTemplate(frame).map((layer) =>
+        layer.id === id ? { ...layer, name: trimmed } : layer
+      )
+      return recording(s, {
+        frames: s.frames.map((f) => alignFrameLayers(f, template)),
+      })
+    }),
+
+  selectLayer: (id) =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      if (!frame.layers?.some((layer) => layer.id === id)) return s
+      return {
+        frames: s.frames.map((f) =>
+          ensureFrameLayers({ ...f, activeLayerId: id })
+        ),
+        currentId: s.currentId,
+      }
+    }),
+
+  reorderLayers: (fromIndex, toIndex) =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const layers = [...(frame.layers ?? [])]
+      if (
+        fromIndex === toIndex ||
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= layers.length ||
+        toIndex >= layers.length
+      ) {
+        return s
+      }
+      const [moved] = layers.splice(fromIndex, 1)
+      layers.splice(toIndex, 0, moved)
+      const template = layers.map((layer) => ({ ...layer, json: null }))
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => {
+            const aligned = alignFrameLayers(f, template, frame.activeLayerId)
+            // A reorder is a global layer-stack change, but it must not wipe the
+            // neighbouring frames' cached snapshots: doing so blanks their onion
+            // skins. Only the current frame gets re-snapshotted when the canvas
+            // reloads it.
+            return f.id === s.currentId
+              ? aligned
+              : { ...aligned, dataUrl: f.dataUrl }
+          }),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  toggleLayerHidden: (id) =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const template = layerTemplate(frame).map((layer) =>
+        layer.id === id ? { ...layer, hidden: !layer.hidden } : layer
+      )
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => alignFrameLayers(f, template, frame.activeLayerId)),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  toggleLayerLocked: (id) =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      const template = layerTemplate(frame).map((layer) =>
+        layer.id === id ? { ...layer, locked: !layer.locked } : layer
+      )
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => alignFrameLayers(f, template, frame.activeLayerId)),
+        }),
+        revision: s.revision + 1,
+      }
+    }),
+
+  setLayerOpacity: (id, opacity) =>
+    set((s) => {
+      const frame = ensureFrameLayers(s.frames.find((f) => f.id === s.currentId)!)
+      if (!frame.layers?.some((layer) => layer.id === id)) return s
+      // Opacity is per-frame, so only the current frame is rebuilt. Other
+      // frames keep their layers and snapshots untouched, which keeps their
+      // onion skins intact instead of reloading or blanking them.
+      const layers = (frame.layers ?? []).map((layer) =>
+        layer.id === id ? { ...layer, opacity: clamp(opacity, 0.05, 1) } : layer
+      )
+      const nextFrame = withComposite({ ...frame, layers }, null)
+      return {
+        ...recording(s, {
+          frames: s.frames.map((f) => (f.id === s.currentId ? nextFrame : f)),
         }),
         revision: s.revision + 1,
       }

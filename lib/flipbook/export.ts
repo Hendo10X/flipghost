@@ -1,4 +1,4 @@
-import type { AudioTrack, Frame } from "./store"
+import { layeredFrameJSON, type AudioTrack, type Frame } from "./store"
 
 export type ExportFormat = "gif" | "mp4"
 
@@ -34,8 +34,9 @@ async function renderFrames(
   try {
     for (let i = 0; i < frames.length; i++) {
       stage.clear()
-      if (frames[i].json) {
-        await stage.loadFromJSON(frames[i].json as object)
+      const json = layeredFrameJSON(frames[i])
+      if (json) {
+        await stage.loadFromJSON(json as object)
       }
       stage.renderAll()
       const layer = stage.toCanvasElement(1)

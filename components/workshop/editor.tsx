@@ -11,7 +11,13 @@ import {
   snapshotChanged,
   snapshotFromState,
 } from "@/lib/flipbook/persistence"
-import { getStagePreset, useFlipbook, type AudioTrack, type Frame } from "@/lib/flipbook/store"
+import {
+  ensureFrameLayers,
+  getStagePreset,
+  useFlipbook,
+  type AudioTrack,
+  type Frame,
+} from "@/lib/flipbook/store"
 import { getHotkeysSnapshot } from "@/lib/hotkeys"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { CanvasStage } from "@/components/workshop/canvas-stage"
@@ -49,6 +55,7 @@ export function Editor({
 
     async function boot() {
       if (initialProject && initialProject.frames.length > 0) {
+        const frames = initialProject.frames.map(ensureFrameLayers)
         useFlipbook.setState((s) => ({
           projectId: initialProject.id,
           cloudStatus: "saved",
@@ -56,8 +63,8 @@ export function Editor({
           fps: initialProject.fps,
           stagePresetId: initialProject.stagePresetId,
           audioTrack: initialProject.audioTrack ?? null,
-          frames: initialProject.frames,
-          currentId: initialProject.frames[0].id,
+          frames,
+          currentId: frames[0].id,
           past: [],
           future: [],
           revision: s.revision + 1,
@@ -68,21 +75,26 @@ export function Editor({
         const demoFrames = await buildDemoFrames(spec)
         if (disposed) return
         clearLocalSnapshot()
+        const frames = demoFrames.map(ensureFrameLayers)
         useFlipbook.setState((s) => ({
           projectId: null,
           cloudStatus: "idle",
           title: spec.title,
           fps: spec.fps,
           stagePresetId: spec.stagePresetId,
-          frames: demoFrames,
-          currentId: demoFrames[0].id,
+          frames,
+          currentId: frames[0].id,
           past: [],
           future: [],
           revision: s.revision + 1,
         }))
       } else if (initialNew) {
         // Fresh "New animation" at a chosen name/size: blank canvas, clean slate.
-        const frame: Frame = { id: crypto.randomUUID(), json: null, dataUrl: null }
+        const frame = ensureFrameLayers({
+          id: crypto.randomUUID(),
+          json: null,
+          dataUrl: null,
+        })
         clearLocalSnapshot()
         useFlipbook.setState((s) => ({
           projectId: null,
@@ -102,8 +114,9 @@ export function Editor({
         if (snapshot && useFlipbook.getState().projectId === null) {
           useFlipbook.setState((s) => ({
             ...snapshot,
+            frames: snapshot.frames.map(ensureFrameLayers),
             past: [],
-          future: [],
+            future: [],
             revision: s.revision + 1,
           }))
         }

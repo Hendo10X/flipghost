@@ -1,4 +1,4 @@
-import type { AudioTrack, Frame } from "./store"
+import { frameJSONForStorage, type AudioTrack, type Frame } from "./store"
 
 export interface SaveProjectInput {
   projectId: string | null
@@ -23,7 +23,7 @@ export async function saveProjectToCloud(
       audioTrack: input.audioTrack ?? null,
       frames: input.frames.map((frame, index) => ({
         orderIndex: index,
-        json: frame.json ? JSON.stringify(frame.json) : null,
+        json: JSON.stringify(frameJSONForStorage(frame)),
         thumbnail: frame.dataUrl,
       })),
     }),
